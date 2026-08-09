@@ -1,0 +1,185 @@
+mqtt:
+  host: mosquitto
+  port: 1883
+
+detectors:
+  cpu1:
+    type: cpu
+    num_threads: 3
+
+# Catatan hardware decode (Raspberry Pi 5):
+# Pi 5 hanya punya hardware decoder untuk HEVC/H.265, BUKAN H.264 seperti Pi 4.
+# Preset `preset-rpi-64-h264` masih belum stabil/didukung resmi di Pi 5 per Agustus 2026
+# (lihat https://github.com/blakeblackshear/frigate/discussions/16411 dan #18431).
+# Karena itu config ini default-nya pakai software decode. Beban decode hanya kena di
+# stream "detect" (resolusi rendah, lihat di bawah), bukan di stream "record" (cuma
+# di-remux, tidak di-decode) -- jadi harusnya cukup ringan untuk CPU Pi 5 (quad-core
+# Cortex-A76) meski tanpa hwaccel. Kalau nanti mau eksperimen hwaccel, tambahkan
+# `hwaccel_args: preset-rpi-64-h264` di bagian ffmpeg tiap kamera dan cek
+# `docker compose logs frigate` untuk error decode.
+
+record:
+  enabled: true
+  # Tidak simpan rekaman continuous/raw-motion 24 jam -- hanya simpan clip event
+  # (alerts/detections) di bawah, supaya hemat NVMe.
+  continuous:
+    days: 0
+  motion:
+    days: 0
+  alerts:
+    retain:
+      days: 7
+      mode: motion
+  detections:
+    retain:
+      days: 7
+      mode: motion
+
+snapshots:
+  enabled: true
+  retain:
+    default: 7
+
+# --- Strategi kamera: prioritas vs non-prioritas ---
+# Raspberry Pi ini SHARED dengan banyak service Docker lain (ticketing, platform lain,
+# AI platform, meet/LiveKit, dll) -- load average host sudah ~4-6 di CPU 4-core bahkan
+# sebelum CCTV ditambah, RAM juga ketat. Hasil benchmark cam1 (lihat catatan di bawah):
+# detect di 1280x720/5fps bikin detector CPU pakai ~220-230% CPU sendirian utk 1 kamera
+# saja (skipped_fps ~2.4 dari 5.1 -- hampir separuh frame di-skip). Karena itu strategi
+# yang dipakai di sini: AI object detection HANYA diaktifkan di kamera prioritas
+# (mis. pintu masuk/area rawan), kamera lain tetap live view + record + timelapse penuh
+# tapi TANPA AI detection (jauh lebih ringan, karena tidak ada beban decode+inference
+# tambahan untuk detect).
+#
+# INI FILE TEMPLATE, bukan config final -- Frigate tidak membaca file ini langsung.
+# Setiap kali container frigate start, `render_config.py` membaca file ini, mengganti
+# token `__DETECT_<NAMA>__` jadi `true`/`false` sesuai daftar kamera di variabel
+# DETECT_CAMERAS (.env), lalu menulis hasilnya ke config.yml final yang dipakai Frigate.
+# Jadi buat MEMILIH KAMERA MANA YANG PAKAI AI DETECTION, cukup edit satu baris:
+#   DETECT_CAMERAS=bardi          # hanya bardi
+#   DETECT_CAMERAS=bardi,cam1     # bardi dan cam1 sama-sama aktif AI-nya
+# lalu `docker compose up -d --force-recreate frigate` -- TIDAK PERLU edit file ini.
+# (Toggle enabled/disabled AI lewat Frigate UI juga bisa, tapi TIDAK persisten --
+# balik ke nilai DETECT_CAMERAS ini lagi setiap kali container di-restart, karena
+# ini keterbatasan Frigate sendiri: https://github.com/blakeblackshear/frigate/discussions/21656)
+#
+# Kamera yang TIDAK PERNAH butuh AI (non-prioritas permanen) sebaiknya tidak diberi
+# role "detect" sama sekali (lihat template cam2..cam5 di bawah) -- lebih hemat CPU
+# karena stream deteksinya tidak perlu di-decode sama sekali. Token semacam ini hanya
+# untuk kamera yang MUNGKIN dipakai AI kadang-kadang (kamera "prioritas-capable").
+#
+# Setting kamera baru:
+#   1. Ganti key "cam1" dengan nama yang jelas, mis. "teras" / "garasi"
+#      (nama ini yang muncul di Frigate UI, API `/api/<nama>/latest.jpg`, dan
+#      dipakai oleh service timelapse lewat TIMELAPSE_CAMERAS di .env).
+#   2. Ganti {FRIGATE_CAM1_HOST} dengan variabel host kamera yang sesuai di .env
+#      (variabel HARUS diawali FRIGATE_ agar Frigate bisa membacanya).
+#   3. Path RTSP beda-beda per kamera (lihat CAMERAS.md) -- jangan asumsikan semua
+#      kamera pakai /unicast:8554 seperti cam1, cek dulu per kamera.
+#   4. Tambahkan token `enabled: __DETECT_<NAMA_HURUF_BESAR>__` di blok `detect` kalau
+#      kamera ini calon kamera prioritas (lihat cam1/bardi di bawah sebagai contoh).
+cameras:
+  # --- Kamera prioritas-capable (AI detection dikontrol lewat DETECT_CAMERAS di .env) ---
+  # detect.width/height 640x360 + fps 5 adalah hasil benchmark di cam1: dibanding
+  # 1280x720 (skipped_fps 2.4/5.1), turun resolusi ini membuat skipped_fps jadi 1.2/5.1
+  # -- lebih ringan tanpa kehilangan akurasi terlalu banyak. Kalau masih terasa berat
+  # setelah beberapa kamera prioritas aktif bersamaan, turunkan fps ke 3-4 dulu sebelum
+  # menurunkan resolusi lebih jauh.
+  cam1:
+    ffmpeg:
+      inputs:
+        - path: rtsp://{FRIGATE_CAM1_HOST}:8554/unicast
+          roles:
+            - detect
+            - record
+    detect:
+      enabled: __DETECT_CAM1__
+      width: 640
+      height: 360
+      fps: 5
+    objects:
+      track:
+        - person
+
+  # Kamera "bardi" (192.168.1.27) pakai ONVIF (bukan RTSP unicast langsung seperti
+  # cam1) -- stream URI resminya didapat lewat ONVIF GetStreamUri:
+  #   rtsp://192.168.1.27/V_ENC_000, butuh auth (username/password RTSP terpisah dari
+  #   web UI kamera). Source: HEVC/H.265, 2304x1296 -- jauh lebih besar dari cam1, jadi
+  #   detect di-downscale ke 640x360 juga (sama seperti cam1) supaya konsisten.
+  #   Lihat CAMERAS.md untuk detail akses lengkap.
+  bardi:
+    ffmpeg:
+      inputs:
+        - path: rtsp://{FRIGATE_BARDI_USER}:{FRIGATE_BARDI_PASS}@{FRIGATE_BARDI_HOST}:554/V_ENC_000
+          roles:
+            - detect
+            - record
+    detect:
+      enabled: __DETECT_BARDI__
+      width: 640
+      height: 360
+      fps: 5
+    objects:
+      track:
+        - person
+
+  # Kamera "c301" (Xiaomi Smart Camera C301, 192.168.1.7) TIDAK bisa diakses lewat RTSP
+  # atau ONVIF langsung (semua port tertutup) -- firmware stock Mi Home, bukan hasil
+  # custom firmware seperti cam1/bardi. Satu-satunya jalan masuk: protokol P2P Xiaomi
+  # (cs2) lewat go2rtc standalone (service `go2rtc` di docker-compose.yml, BUKAN go2rtc
+  # bawaan Frigate yang versinya belum support Xiaomi). Path di bawah nunjuk ke restream
+  # RTSP dari go2rtc itu (port 8556, host networking) lewat `host.docker.internal`.
+  # Non-prioritas (tanpa role detect) per keputusan user 2026-08-10. Kalau mau dijadikan
+  # prioritas nanti: tambah role `detect`, ganti `enabled: false` di bawah jadi token
+  # deteksi (pola sama seperti cam1/bardi di atas), lalu tambahkan "c301" ke
+  # DETECT_CAMERAS di .env. Detail lengkap: CAMERAS.md.
+  c301:
+    ffmpeg:
+      inputs:
+        - path: rtsp://host.docker.internal:8556/c301
+          roles:
+            - record
+    detect:
+      enabled: false
+
+# Salin blok "kamera prioritas-capable" di atas untuk kamera lain yang MUNGKIN butuh
+# AI detection (jangan lupa tambah token __DETECT_<NAMA>__ dan daftarkan di DETECT_CAMERAS
+# kalau memang mau diaktifkan). Untuk kamera yang PASTI TIDAK PERNAH butuh AI (live view +
+# record + timelapse saja -- jauh lebih ringan di CPU karena tidak ada role "detect" sama
+# sekali), pakai template di bawah ini. Uncomment & sesuaikan sesuai jumlah kamera:
+#
+#  cam2:
+#    ffmpeg:
+#      inputs:
+#        - path: rtsp://{FRIGATE_CAM2_HOST}:8554/unicast
+#          roles:
+#            - record
+#    detect:
+#      enabled: false
+#
+#  cam3:
+#    ffmpeg:
+#      inputs:
+#        - path: rtsp://{FRIGATE_CAM3_HOST}:8554/unicast
+#          roles:
+#            - record
+#    detect:
+#      enabled: false
+#
+#  cam4:
+#    ffmpeg:
+#      inputs:
+#        - path: rtsp://{FRIGATE_CAM4_HOST}:8554/unicast
+#          roles:
+#            - record
+#    detect:
+#      enabled: false
+#
+#  cam5:
+#    ffmpeg:
+#      inputs:
+#        - path: rtsp://{FRIGATE_CAM5_HOST}:8554/unicast
+#          roles:
+#            - record
+#    detect:
+#      enabled: false

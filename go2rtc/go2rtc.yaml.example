@@ -1,0 +1,29 @@
+# Template config go2rtc standalone -- dipakai sebagai jembatan untuk kamera yang
+# butuh protokol P2P Xiaomi (cs2), bukan RTSP biasa. Frigate versi ini membundel
+# go2rtc 1.9.10 yang BELUM support Xiaomi (baru ada di go2rtc >=1.9.13), jadi kita
+# jalankan go2rtc versi lebih baru terpisah (network_mode: host, WAJIB untuk UDP
+# hole-punching P2P -- lihat komentar di docker-compose.yml), lalu Frigate konsumsi
+# hasil restream-nya sebagai RTSP normal lewat `rtsp://host.docker.internal:8556/<nama>`.
+#
+# Cara isi nilai di bawah:
+#   1. Buka dashboard go2rtc ini di http://<ip-raspberry-pi>:1984/add.html
+#   2. Login pakai akun Mi Home (password TIDAK disimpan di sini, cuma dipakai sekali
+#      untuk fetch account_id + daftar device dari cloud Xiaomi). Region yang tersedia
+#      cuma: de, i2 (India), ru, sg (Singapura), us, atau default/China -- TIDAK ada
+#      "Indonesia" karena Xiaomi tidak punya server khusus per negara. Untuk akun
+#      Indonesia, coba region `sg` dulu (server yang melayani Asia Tenggara).
+#   3. Cari kamera yang mau ditambahkan, catat account_id, region, dan device ID (did).
+#   4. Isi di bawah, lalu `docker compose up -d --force-recreate go2rtc`.
+#
+# File ini cuma TEMPLATE (git-tracked, tanpa data asli). File konfigurasi asli yang
+# dipakai ada di storage/go2rtc/go2rtc.yaml (gitignored, jangan commit -- berisi juga
+# sesi login cloud terenkripsi di key `xiaomi:`, bukan cuma daftar stream).
+api:
+  listen: ":1984"
+rtsp:
+  listen: ":8556"
+webrtc:
+  listen: ":8557"
+
+streams:
+  c301: "xiaomi://ACCOUNT_ID:REGION@192.168.1.7?did=DEVICE_ID&model=mxiang.camera.c301"

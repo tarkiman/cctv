@@ -1,0 +1,80 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: cctv-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./storage/mosquitto:/mosquitto/data
+
+  # go2rtc standalone (versi lebih baru dari yang dibundel Frigate) -- jembatan untuk
+  # kamera yang cuma bisa diakses lewat protokol P2P Xiaomi (cs2), bukan RTSP biasa.
+  # Frigate bundling go2rtc 1.9.10 yang belum support Xiaomi (baru ada di >=1.9.13).
+  # Dashboard-nya (port 1984) dipakai sekali untuk login akun Mi Home & cari device ID
+  # kamera -- lihat go2rtc/go2rtc.yaml.example dan CAMERAS.md.
+  #
+  # WAJIB network_mode: host -- protokol P2P Xiaomi (cs2) butuh UDP hole-punching yang
+  # gagal ("read punch: i/o timeout") kalau container ada di belakang NAT bridge Docker
+  # biasa. Karena host networking, port listen go2rtc diatur manual di go2rtc.yaml jadi
+  # 8556 (rtsp) dan 8557 (webrtc) supaya tidak bentrok dengan port Frigate (8554/8555).
+  go2rtc:
+    image: alexxit/go2rtc:1.9.13
+    container_name: cctv-go2rtc
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./storage/go2rtc:/config
+
+  frigate:
+    image: ghcr.io/blakeblackshear/frigate:stable
+    container_name: cctv-frigate
+    restart: unless-stopped
+    shm_size: "256mb"
+    depends_on:
+      - mosquitto
+    env_file:
+      - .env
+    # host.docker.internal -> IP Pi ini -- dipakai buat menjangkau go2rtc yang jalan
+    # di network_mode: host (lihat komentar di service go2rtc).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Render frigate/config.template.yml -> /config/config.yml (mengganti token
+    # __DETECT_<NAMA>__ sesuai DETECT_CAMERAS di .env) sebelum menjalankan Frigate
+    # yang sesungguhnya (/init, entrypoint asli image ini). Lihat render_config.py.
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        python3 /render/render_config.py
+        exec /init
+    ports:
+      - "5000:5000"
+      - "8554:8554"
+      - "8555:8555/tcp"
+      - "8555:8555/udp"
+    volumes:
+      - ./frigate/config.template.yml:/render/config.template.yml:ro
+      - ./frigate/render_config.py:/render/render_config.py:ro
+      - ./storage/frigate-config:/config
+      - ./storage/frigate:/media/frigate
+      - /etc/localtime:/etc/localtime:ro
+    # devices:
+    #   - /dev/dri:/dev/dri   # aktifkan hanya kalau eksperimen hwaccel, lihat README
+
+  timelapse:
+    build: ./timelapse
+    container_name: cctv-timelapse
+    restart: unless-stopped
+    depends_on:
+      - frigate
+    environment:
+      FRIGATE_URL: http://frigate:5000
+      TIMELAPSE_STORAGE: /storage/timelapse
+      TIMELAPSE_INTERVAL_SECONDS: ${TIMELAPSE_INTERVAL_SECONDS:-60}
+      TIMELAPSE_CAMERAS: ${TIMELAPSE_CAMERAS}
+      TIMELAPSE_FRAMERATE: ${TIMELAPSE_FRAMERATE:-24}
+      TIMELAPSE_KEEP_RAW: ${TIMELAPSE_KEEP_RAW:-false}
+    volumes:
+      - ./storage/timelapse:/storage/timelapse
