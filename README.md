@@ -9,7 +9,8 @@ Xiaomi Mi Home stock (tanpa hack) yang diakses lewat protokol cloud P2P. Lihat
 Stack: **Frigate** (live view, recording, AI object detection) + **Mosquitto** (MQTT,
 bus event) + **go2rtc standalone** (jembatan untuk kamera Xiaomi Mi Home stock yang
 tidak bisa RTSP/ONVIF langsung) + **timelapse** (snapshot berkala + compile video
-harian).
+harian) + **panel** (halaman web kecil buat toggle AI detection per kamera tanpa SSH,
+lihat "Panel kontrol (browser)" di bawah).
 
 ## Prasyarat di tiap kamera
 
@@ -80,7 +81,55 @@ langsung untuk menambah role `detect`-nya dulu.
 Frigate juga punya toggle AI detection lewat UI/MQTT sendiri, tapi **tidak persisten**
 — balik lagi ke nilai `DETECT_CAMERAS` setiap kali container di-restart (keterbatasan
 Frigate: [diskusi terkait](https://github.com/blakeblackshear/frigate/discussions/21656)).
-Jadi `DETECT_CAMERAS` di `.env` adalah satu-satunya sumber kebenaran yang persisten.
+Jadi `DETECT_CAMERAS` di `.env` adalah satu-satunya sumber kebenaran yang persisten
+(kecuali sudah pernah diubah lewat panel di bawah, lihat urutan sumbernya di sana).
+
+## Panel kontrol (browser)
+
+Toggle AI detection per kamera bisa juga lewat browser, tanpa SSH/terminal:
+**`http://<ip-raspberry-pi>:8091`** — login pakai `PANEL_USER`/`PANEL_PASS` dari
+`.env`.
+
+Cara kerja: panel baca daftar kamera yang punya token `__DETECT_<NAMA>__` langsung
+dari `frigate/config.template.yml` (jadi otomatis ikut kamera baru yang ditambahkan,
+tidak perlu ubah kode panel), lalu saat toggle disimpan:
+1. Ditulis ke `storage/panel/detect_cameras.txt` (override, menang dibanding
+   `DETECT_CAMERAS` di `.env` — lihat `render_config.py`).
+2. Panel memicu restart container `frigate` lewat `docker-socket-proxy` (bukan
+   `docker compose up -d --force-recreate`, cukup restart biasa, karena
+   `render_config.py` jalan lagi tiap Frigate start dan baca ulang file override itu).
+3. Frigate restart (~10-20 detik), config baru berlaku.
+
+**Kenapa ada `docker-socket-proxy` terpisah**, bukan mount `/var/run/docker.sock`
+langsung ke panel: akses `docker.sock` langsung setara akses root ke *seluruh* Docker
+host — di Pi shared ini artinya bisa kontrol container siapa pun (ticketing, akunikahid,
+dll), bukan cuma punya kita. `docker-socket-proxy` (image `tecnativa/docker-socket-proxy`)
+jadi perantara yang cuma mengizinkan operasi restart/stop/kill lewat env `POST=1` +
+`ALLOW_RESTARTS=1`.
+
+**Catatan penting kalau mengubah env `docker-socket-proxy`:** jangan set `CONTAINERS=1`
+kalau maksudnya cuma mau read-only list/inspect — sudah diverifikasi lewat tes manual
+(`POST /containers/create` dengan `CONTAINERS=1` + `POST=1` ternyata **berhasil**
+bikin container baru, bukan cuma read-only seperti dikira dari dokumentasi). Konfigurasi
+final yang sudah diverifikasi cukup `POST=1` + `ALLOW_RESTARTS=1` saja (tanpa
+`CONTAINERS`) — `create`/`exec`/list semua ditolak (403), cuma
+`stop`/`restart`/`kill` yang diizinkan. Kalau menambah env baru ke service ini di masa
+depan, selalu verifikasi ulang dengan tes manual seperti di atas, jangan percaya
+dokumentasi/asumsi begitu saja.
+
+**Batasan yang masih ada** (diterima secara sadar, bukan celah yang belum ketahuan):
+restart lewat proxy ini tidak dibatasi per nama container — siapa pun yang bisa
+menjangkau `docker-socket-proxy` (cuma container lain di network compose ini, tidak
+ada port ke host) secara teknis bisa restart container APAPUN di Pi ini, tidak cuma
+`cctv-frigate`. Panel kita sendiri cuma pernah memanggil restart untuk `cctv-frigate`,
+jadi ini bukan masalah selama panel-nya sendiri tidak disusupi — tapi kalau mau
+diperketat lagi, cek apakah versi `docker-socket-proxy` yang dipakai support pembatasan
+per-nama-container di masa depan.
+
+Panel di-bind ke port `8091` di host (LAN saja, **tidak** di-routing lewat domain publik
+`cctv.tarkiman.com` yang sudah ada di Pi ini) + basic auth. Kalau nanti mau diakses dari
+luar rumah juga, wajib taruh di belakang HTTPS reverse proxy dulu — basic auth tanpa
+HTTPS mengirim password polos di jaringan.
 
 ## Kamera Xiaomi Mi Home stock (lewat go2rtc)
 
@@ -121,9 +170,12 @@ Catatan teknis penting kalau mengubah setup ini:
 
 ## Verifikasi
 
-- `docker compose ps` — semua service (`mosquitto`, `frigate`, `go2rtc`, `timelapse`)
-  harus `running`.
+- `docker compose ps` — semua service (`mosquitto`, `frigate`, `go2rtc`, `timelapse`,
+  `docker-socket-proxy`, `panel`) harus `running`.
 - Frigate UI menampilkan live feed semua kamera (bukan "camera is offline").
+- Buka `http://<ip-raspberry-pi>:8091`, login, toggle satu kamera, "Simpan & Terapkan"
+  — status "live" di panel dan `detection_enabled` di
+  `curl http://localhost:5000/api/stats` harus berubah setelah beberapa detik.
 - Untuk kamera lewat go2rtc (mis. `c301`): `curl http://localhost:1984/api/streams`
   harus menunjukkan `producers` terisi (bukan kosong/error) untuk stream itu.
 - `docker compose logs frigate` — tidak ada error decode RTSP berulang.
@@ -193,9 +245,15 @@ http://localhost:5000/api/stats` sebelum menganggap suatu setting "aman".
 ## Belum dikerjakan (fase berikutnya)
 
 - Halaman portal web custom yang menyatukan live view Frigate + galeri timelapse dalam
-  satu UI.
+  satu UI (panel yang sudah ada sekarang cuma untuk toggle setting, bukan live
+  view/galeri).
 - Worker AI/OpenCV yang subscribe ke event MQTT Frigate atau memproses snapshot
   timelapse.
+- Panel baru mengurus toggle AI detection -- kalau mau tambah setting lain ke sana
+  (mis. timelapse interval/framerate), ikuti pola yang sama (state file di
+  `storage/panel/`, dibaca ulang oleh proses yang relevan saat restart, bukan
+  `docker compose up -d --force-recreate` supaya bisa dipicu lewat
+  `docker-socket-proxy` yang restart-only).
 - Review reverse proxy HTTPS + autentikasi untuk akses dari luar rumah — **catatan:**
   domain `cctv.tarkiman.com` sepertinya sudah di-routing (kemungkinan lewat Traefik
   yang juga jalan di Pi ini untuk stack lain) ke Frigate UI di sini, ketahuan dari log
@@ -219,3 +277,9 @@ http://localhost:5000/api/stats` sebelum menganggap suatu setting "aman".
 - Dashboard go2rtc (port 1984) tidak ada autentikasi bawaan — siapa pun di LAN yang
   sama bisa akses/re-konfigurasi stream kamera lewat situ. Cukup aman untuk LAN rumah,
   tapi jangan expose port ini ke luar rumah.
+- Panel kontrol (port 8091) pakai basic auth (`PANEL_USER`/`PANEL_PASS` di `.env`,
+  wajib diisi — panel menolak start kalau `PANEL_PASS` kosong) dan hanya bisa memicu
+  restart container (lewat `docker-socket-proxy` yang dibatasi ke operasi
+  restart/stop/kill saja, tidak ada exec/create/image/volume access — lihat "Panel
+  kontrol (browser)" untuk detail verifikasinya). Tetap LAN-only, tidak di-routing ke
+  domain publik.

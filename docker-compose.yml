@@ -59,9 +59,50 @@ services:
       - ./frigate/render_config.py:/render/render_config.py:ro
       - ./storage/frigate-config:/config
       - ./storage/frigate:/media/frigate
+      - ./storage/panel:/panel-state:ro
       - /etc/localtime:/etc/localtime:ro
     # devices:
     #   - /dev/dri:/dev/dri   # aktifkan hanya kalau eksperimen hwaccel, lihat README
+
+  # Proxy terbatas ke Docker socket -- HANYA mengizinkan restart container (lihat env
+  # di bawah), TIDAK exec/create/volume/image access. Dipakai oleh service `panel`
+  # supaya toggle di browser bisa memicu restart Frigate tanpa perlu akses penuh ke
+  # Docker daemon (yang setara akses root ke seluruh host -- penting karena Pi ini
+  # shared host). Tidak expose port ke host, cuma reachable dari container lain.
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: cctv-docker-socket-proxy
+    restart: unless-stopped
+    environment:
+      # PENTING: CONTAINERS=1 ternyata membuka /containers/create juga (bukan cuma
+      # read-only list/inspect seperti dikira awalnya -- terbukti lewat tes manual,
+      # bukan asumsi dari dokumentasi). CONTAINERS harus TETAP 0/mati; ALLOW_RESTARTS
+      # + POST sudah cukup untuk carve-out restart/stop/kill secara spesifik tanpa
+      # membuka route /containers/create. Lihat README.md "Panel kontrol (browser)"
+      # untuk hasil verifikasi lengkapnya.
+      POST: 1
+      ALLOW_RESTARTS: 1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  # Panel web kecil buat toggle AI detection per kamera dari browser (LAN saja, basic
+  # auth). Nulis ke storage/panel/detect_cameras.txt (dibaca render_config.py sebagai
+  # override DETECT_CAMERAS), lalu restart Frigate lewat docker-socket-proxy di atas.
+  # Lihat README.md "Panel kontrol (browser)".
+  panel:
+    build: ./panel
+    container_name: cctv-panel
+    restart: unless-stopped
+    depends_on:
+      - frigate
+      - docker-socket-proxy
+    env_file:
+      - .env
+    ports:
+      - "8091:8000"
+    volumes:
+      - ./frigate/config.template.yml:/app/config.template.yml:ro
+      - ./storage/panel:/state
 
   timelapse:
     build: ./timelapse
