@@ -2,10 +2,14 @@ mqtt:
   host: mosquitto
   port: 1883
 
+# num_threads: 3 sebelumnya bikin proses detector CPU sendirian pakai ~220-230% CPU
+# (2.2+ dari 4 core Pi 5) hampir terus-menerus untuk 1 kamera prioritas -- diturunkan
+# ke 2 supaya tidak terlalu mendominasi CPU shared host ini (lihat "Catatan performa"
+# di README.md untuk data before/after).
 detectors:
   cpu1:
     type: cpu
-    num_threads: 3
+    num_threads: 2
 
 # Catatan hardware decode (Raspberry Pi 5):
 # Pi 5 hanya punya hardware decoder untuk HEVC/H.265, BUKAN H.264 seperti Pi 4.
@@ -80,11 +84,15 @@ snapshots:
 #      kamera ini calon kamera prioritas (lihat cam1/bardi di bawah sebagai contoh).
 cameras:
   # --- Kamera prioritas-capable (AI detection dikontrol lewat DETECT_CAMERAS di .env) ---
-  # detect.width/height 640x360 + fps 5 adalah hasil benchmark di cam1: dibanding
-  # 1280x720 (skipped_fps 2.4/5.1), turun resolusi ini membuat skipped_fps jadi 1.2/5.1
-  # -- lebih ringan tanpa kehilangan akurasi terlalu banyak. Kalau masih terasa berat
-  # setelah beberapa kamera prioritas aktif bersamaan, turunkan fps ke 3-4 dulu sebelum
-  # menurunkan resolusi lebih jauh.
+  # detect.width/height 640x360 adalah hasil benchmark di cam1: dibanding 1280x720
+  # (skipped_fps 2.4/5.1), turun resolusi ini membuat skipped_fps jadi 1.2/5.1 -- lebih
+  # ringan tanpa kehilangan akurasi terlalu banyak.
+  # fps 3 (bukan 5) + num_threads:2 (lihat detectors.cpu1 di atas) adalah hasil tuning
+  # 2026-08-10: proses detector CPU sendirian sempat pakai ~220-230% CPU (2.2+ dari 4
+  # core Pi 5) hampir terus-menerus dengan fps:5/num_threads:3 untuk 1 kamera prioritas
+  # saja -- lihat "Catatan performa" di README.md untuk angka before/after lengkap.
+  # Kalau masih terasa berat setelah beberapa kamera prioritas aktif bersamaan, turunkan
+  # fps lagi (mis. ke 2) sebelum menurunkan resolusi lebih jauh.
   cam1:
     ffmpeg:
       inputs:
@@ -96,7 +104,7 @@ cameras:
       enabled: __DETECT_CAM1__
       width: 640
       height: 360
-      fps: 5
+      fps: 3
     objects:
       track:
         - person
@@ -118,7 +126,7 @@ cameras:
       enabled: __DETECT_BARDI__
       width: 640
       height: 360
-      fps: 5
+      fps: 3
     objects:
       track:
         - person
