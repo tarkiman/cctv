@@ -15,15 +15,15 @@ dan cara mendapatkannya kalau lupa.
 
 | | |
 |---|---|
-| IP | `192.168.1.12` (statis) |
+| IP | `192.168.1.13` (statis, diganti dari `192.168.1.12` per 2026-08-10) |
 | Firmware | [Xiaomi-Dafang-Hacks](https://github.com/EliasKotlyar/Xiaomi-Dafang-Hacks) |
 | Akses SSH/root | `root` / `ismart12` (default firmware, lihat README proyek Dafang-hacks) |
-| Web UI | `http://192.168.1.12` (port 80) |
-| RTSP | `rtsp://192.168.1.12:8554/unicast` — **tanpa auth** |
+| Web UI | `http://192.168.1.13` (port 80) |
+| RTSP | `rtsp://192.168.1.13:8554/unicast` — **tanpa auth** |
 | Video | H.264, 1280x720 (source), `.env`: `FRIGATE_CAM1_HOST` |
 | Frigate key | `cam1` |
 | Status Frigate | Priority-capable (punya token `__DETECT_CAM1__`), aktif/nonaktifnya AI diatur lewat `DETECT_CAMERAS` di `.env` |
-| Catatan | Sempat dimatikan manual oleh user (2026-08-09), sudah online lagi per 2026-08-10 — Frigate otomatis reconnect sendiri tanpa perlu restart, jadi kalau kamera ini mati/nyala lagi di kemudian hari tidak perlu ada tindakan config apa pun. Cara dapat RTSP URL: aktifkan RTSP lewat web UI kamera, defaultnya di path `/unicast` port `8554`. |
+| Catatan | IP berubah dari `.12` ke `.13` (2026-08-10) -- cukup ganti `FRIGATE_CAM1_HOST` di `.env` lalu `docker compose up -d --force-recreate frigate` (env di-bake saat container dibuat, restart biasa tidak cukup). Kalau kamera ini mati/nyala tanpa ganti IP, Frigate reconnect otomatis sendiri, tidak perlu tindakan apa pun. Cara dapat RTSP URL: aktifkan RTSP lewat web UI kamera, defaultnya di path `/unicast` port `8554`. |
 
 ## bardi
 
