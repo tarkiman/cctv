@@ -61,7 +61,13 @@ services:
       - ./storage/frigate:/media/frigate
       - /etc/localtime:/etc/localtime:ro
     # devices:
-    #   - /dev/dri:/dev/dri   # aktifkan hanya kalau eksperimen hwaccel, lihat README
+    #   # Pi 5 hardware HEVC decoder (V4L2 M2M -- hevc_v4l2m2m).
+    #   # TIDAK BERFUNGSI: ffmpeg enumerasi dari /dev/video0 -- tanpa semua node
+    #   # sebelumnya, device /dev/video19 tidak ditemukan di dalam container.
+    #   # Untuk eksperimen di masa depan: mount seluruh /dev/video* atau pakai
+    #   # privileged: true (bukan rekomendasi untuk production).
+    #   - /dev/video19:/dev/video19
+    #   - /dev/dri/renderD128:/dev/dri/renderD128
 
   timelapse:
     build: ./timelapse

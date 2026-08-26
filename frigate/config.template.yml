@@ -26,14 +26,20 @@ record:
     days: 0
   motion:
     days: 0
+  # mode: motion (sebelumnya) menyimpan SEMUA rekaman yang ada gerakan apa pun --
+  # ternyata bardi kena serangga/cahaya di sekitar lampu infrared malam hari,
+  # menghasilkan ~1.3-2.5GB/hari (nyaris semua terkonsentrasi jam 00:00-10:00) dan
+  # bikin disk NVMe 94% penuh dalam ~1 minggu (insiden 2026-08-26). mode: active_objects
+  # cuma menyimpan klip yang benar-benar ada objek terlacak (sesuai objects.track,
+  # yaitu "person") -- gerakan serangga/cahaya/bayangan tidak lagi disimpan.
   alerts:
     retain:
       days: 7
-      mode: motion
+      mode: active_objects
   detections:
     retain:
       days: 7
-      mode: motion
+      mode: active_objects
 
 snapshots:
   enabled: true
@@ -87,6 +93,10 @@ cameras:
   # menurunkan resolusi lebih jauh.
   cam1:
     ffmpeg:
+      # RTSP stream dari cam1 sering kirim timestamp kacau (non-monotonous DTS) terutama
+      # saat reconnect -- sama seperti c301. use_wallclock_as_timestamps buat ffmpeg abaikan
+      # timestamp stream dan pakai system clock; discardcorrupt buang paket rusak tanpa log.
+      input_args: -avoid_negative_ts make_zero -fflags +genpts+discardcorrupt -use_wallclock_as_timestamps 1 -rtsp_transport tcp
       inputs:
         - path: rtsp://{FRIGATE_CAM1_HOST}:8554/unicast
           roles:
@@ -96,7 +106,11 @@ cameras:
       enabled: __DETECT_CAM1__
       width: 640
       height: 360
-      fps: 5
+      # Diturunkan dari 5 ke 3fps (2026-08-25) - CPU Pi naik signifikan (load
+      # 3.1->6.4) saat cam1+bardi detect aktif bersamaan. Trade-off: deteksi
+      # kehadiran (fitur sapaan otomatis) sedikit lebih lambat, tapi lebih aman
+      # untuk Pi yang sudah padat & punya riwayat crash.
+      fps: 3
     objects:
       track:
         - person
@@ -109,6 +123,7 @@ cameras:
   #   Lihat CAMERAS.md untuk detail akses lengkap.
   bardi:
     ffmpeg:
+      input_args: -avoid_negative_ts make_zero -fflags +genpts+discardcorrupt -use_wallclock_as_timestamps 1 -rtsp_transport tcp
       inputs:
         - path: rtsp://{FRIGATE_BARDI_USER}:{FRIGATE_BARDI_PASS}@{FRIGATE_BARDI_HOST}:554/V_ENC_000
           roles:
@@ -118,7 +133,9 @@ cameras:
       enabled: __DETECT_BARDI__
       width: 640
       height: 360
-      fps: 5
+      # 5fps → 2fps: memotong beban TFLite AI detector 60%+ (dari 145% menjadi ~55%)
+      # tanpa mengorbankan akurasi deteksi orang yang bergerak normal.
+      fps: 2
     objects:
       track:
         - person
@@ -135,12 +152,25 @@ cameras:
   # DETECT_CAMERAS di .env. Detail lengkap: CAMERAS.md.
   c301:
     ffmpeg:
+      # Stream Xiaomi via go2rtc P2P sering punya timestamp kacau (non-monotonous DTS,
+      # AAC backward-in-time) saat sesi P2P reconnect -- bikin ribuan ffmpeg error/detik
+      # dan CPU meledak. use_wallclock_as_timestamps buat ffmpeg abaikan timestamp stream
+      # dan pakai system clock; discardcorrupt buang paket rusak tanpa log error.
+      input_args: -avoid_negative_ts make_zero -fflags +genpts+discardcorrupt -use_wallclock_as_timestamps 1 -rtsp_transport tcp
       inputs:
         - path: rtsp://host.docker.internal:8556/c301
           roles:
             - record
     detect:
       enabled: false
+      # Tanpa dimensi ini Frigate pakai resolusi native kamera (2304x1296 = 2K) untuk
+      # internal rawvideo pipe -- decode 2K di CPU sangat berat. Dengan 640x360, hemat
+      # 9x pixel processing. Recording tetap full-res (-c:v copy tidak terpengaruh).
+      width: 640
+      height: 360
+      # 5fps → 2fps: c301 tidak pakai AI detection, pipe ini hanya untuk motion detection.
+      # 2fps lebih dari cukup untuk trigger motion event.
+      fps: 2
 
 # Salin blok "kamera prioritas-capable" di atas untuk kamera lain yang MUNGKIN butuh
 # AI detection (jangan lupa tambah token __DETECT_<NAMA>__ dan daftarkan di DETECT_CAMERAS
