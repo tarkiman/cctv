@@ -19,8 +19,13 @@ services:
   # gagal ("read punch: i/o timeout") kalau container ada di belakang NAT bridge Docker
   # biasa. Karena host networking, port listen go2rtc diatur manual di go2rtc.yaml jadi
   # 8556 (rtsp) dan 8557 (webrtc) supaya tidak bentrok dengan port Frigate (8554/8555).
+  #
+  # Sesi login cloud Xiaomi (storage/go2rtc/go2rtc.yaml) basi setelah ~2 minggu idle --
+  # kalau stream c301 mati dengan error "read udp ... i/o timeout" (bukan lagi
+  # "miss: read punch"), coba login ulang dulu lewat http://<ip-pi>:1984/add.html
+  # sebelum curiga ke jaringan/firewall. Insiden 2026-08-26: lihat CAMERAS.md.
   go2rtc:
-    image: alexxit/go2rtc:1.9.13
+    image: alexxit/go2rtc:1.9.14
     container_name: cctv-go2rtc
     restart: unless-stopped
     network_mode: host
@@ -59,9 +64,56 @@ services:
       - ./frigate/render_config.py:/render/render_config.py:ro
       - ./storage/frigate-config:/config
       - ./storage/frigate:/media/frigate
+      - ./storage/panel:/panel-state:ro
       - /etc/localtime:/etc/localtime:ro
     # devices:
-    #   - /dev/dri:/dev/dri   # aktifkan hanya kalau eksperimen hwaccel, lihat README
+    #   # Pi 5 hardware HEVC decoder (V4L2 M2M -- hevc_v4l2m2m).
+    #   # TIDAK BERFUNGSI: ffmpeg enumerasi dari /dev/video0 -- tanpa semua node
+    #   # sebelumnya, device /dev/video19 tidak ditemukan di dalam container.
+    #   # Untuk eksperimen di masa depan: mount seluruh /dev/video* atau pakai
+    #   # privileged: true (bukan rekomendasi untuk production).
+    #   - /dev/video19:/dev/video19
+    #   - /dev/dri/renderD128:/dev/dri/renderD128
+
+  # Proxy terbatas ke Docker socket -- HANYA mengizinkan restart container (lihat env
+  # di bawah), TIDAK exec/create/volume/image access. Dipakai oleh service `panel`
+  # supaya toggle di browser bisa memicu restart Frigate tanpa perlu akses penuh ke
+  # Docker daemon (yang setara akses root ke seluruh host -- penting karena Pi ini
+  # shared host). Tidak expose port ke host, cuma reachable dari container lain.
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: cctv-docker-socket-proxy
+    restart: unless-stopped
+    environment:
+      # PENTING: CONTAINERS=1 ternyata membuka /containers/create juga (bukan cuma
+      # read-only list/inspect seperti dikira awalnya -- terbukti lewat tes manual,
+      # bukan asumsi dari dokumentasi). CONTAINERS harus TETAP 0/mati; ALLOW_RESTARTS
+      # + POST sudah cukup untuk carve-out restart/stop/kill secara spesifik tanpa
+      # membuka route /containers/create. Lihat README.md "Panel kontrol (browser)"
+      # untuk hasil verifikasi lengkapnya.
+      POST: 1
+      ALLOW_RESTARTS: 1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  # Panel web kecil buat toggle AI detection per kamera dari browser (LAN saja, basic
+  # auth). Nulis ke storage/panel/detect_cameras.txt (dibaca render_config.py sebagai
+  # override DETECT_CAMERAS), lalu restart Frigate lewat docker-socket-proxy di atas.
+  # Lihat README.md "Panel kontrol (browser)".
+  panel:
+    build: ./panel
+    container_name: cctv-panel
+    restart: unless-stopped
+    depends_on:
+      - frigate
+      - docker-socket-proxy
+    env_file:
+      - .env
+    ports:
+      - "8091:8000"
+    volumes:
+      - ./frigate/config.template.yml:/app/config.template.yml:ro
+      - ./storage/panel:/state
 
   timelapse:
     build: ./timelapse

@@ -15,15 +15,15 @@ dan cara mendapatkannya kalau lupa.
 
 | | |
 |---|---|
-| IP | `192.168.1.12` (statis) |
+| IP | `192.168.1.14` (per 2026-08-13; sudah berubah 3x dalam beberapa hari: `.12` → `.13` → `.14` -- lihat catatan) |
 | Firmware | [Xiaomi-Dafang-Hacks](https://github.com/EliasKotlyar/Xiaomi-Dafang-Hacks) |
 | Akses SSH/root | `root` / `ismart12` (default firmware, lihat README proyek Dafang-hacks) |
-| Web UI | `http://192.168.1.12` (port 80) |
-| RTSP | `rtsp://192.168.1.12:8554/unicast` — **tanpa auth** |
+| Web UI | `http://192.168.1.14` (port 80) |
+| RTSP | `rtsp://192.168.1.14:8554/unicast` — **tanpa auth** |
 | Video | H.264, 1280x720 (source), `.env`: `FRIGATE_CAM1_HOST` |
 | Frigate key | `cam1` |
 | Status Frigate | Priority-capable (punya token `__DETECT_CAM1__`), aktif/nonaktifnya AI diatur lewat `DETECT_CAMERAS` di `.env` |
-| Catatan | Sempat dimatikan manual oleh user (2026-08-09), sudah online lagi per 2026-08-10 — Frigate otomatis reconnect sendiri tanpa perlu restart, jadi kalau kamera ini mati/nyala lagi di kemudian hari tidak perlu ada tindakan config apa pun. Cara dapat RTSP URL: aktifkan RTSP lewat web UI kamera, defaultnya di path `/unicast` port `8554`. |
+| Catatan | **IP sudah 3x berubah dalam beberapa hari** (`.12`→`.13`→`.14`) meski tercatat "statis" -- kemungkinan sebenarnya masih DHCP biasa (bukan reservation) di router, worth dicek/diperbaiki di sisi router supaya tidak perlu update config manual tiap kali berubah. Cara ganti IP di config: update `FRIGATE_CAM1_HOST` di `.env` lalu `docker compose up -d --force-recreate frigate` (env di-bake saat container dibuat, restart biasa tidak cukup). Kalau kamera cuma mati/nyala tanpa ganti IP, Frigate reconnect otomatis sendiri, tidak perlu tindakan apa pun. Cara dapat RTSP URL: aktifkan RTSP lewat web UI kamera, defaultnya di path `/unicast` port `8554`. |
 
 ## bardi
 
@@ -61,18 +61,19 @@ standar ONVIF (WS-Discovery UDP probe + SOAP dengan `UsernameToken`/`PasswordDig
 
 | | |
 |---|---|
-| IP | `192.168.1.7` (statis), MAC `50:7B:91:79:02:CA` |
+| IP | `192.168.1.6` (per 2026-08-26; sudah berubah dari `.7` -- sama seperti cam1, kemungkinan DHCP biasa bukan reservation, lihat catatan CAMERAS.md cam1). MAC `50:7B:91:79:02:CA` (tetap sama, konfirmasi device fisik sama). |
 | Model | Xiaomi Smart Camera C301 (model code go2rtc/cloud: `mxiang.camera.c301`) |
 | Firmware | **Stock Mi Home** — bukan custom firmware seperti cam1/bardi. Tidak ada opsi ONVIF di app kameranya sama sekali. |
 | Web UI / SSH / Telnet / RTSP / ONVIF langsung | **Semua tertutup** — port 80, 22, 23, 554, 8554, 10000 semuanya closed/filtered dari Pi ini. Satu-satunya jalan masuk: protokol P2P proprietary Xiaomi (disebut `cs2` di go2rtc). |
-| Cara akses | Lewat container `go2rtc` **standalone** (`docker-compose.yml`, image `alexxit/go2rtc:1.9.13`, **BUKAN** go2rtc bawaan Frigate yang versinya 1.9.10 dan belum support Xiaomi — dukungan `cs2` baru ada di go2rtc ≥1.9.13). Wajib `network_mode: host` karena protokol P2P butuh UDP hole-punching yang gagal di belakang NAT bridge Docker biasa (error kalau salah: `read punch: i/o timeout`). |
-| Login akun cloud | Mi Home account, **region `sg` (Singapura)** — bukan `cn`/China meski akun terdaftar dari Indonesia (Xiaomi tidak punya server khusus Indonesia, Asia Tenggara termasuk Indonesia dilayani server Singapura). `account_id` dan `did` (device ID) TIDAK ditulis di sini (repo publik) — cek `storage/go2rtc/go2rtc.yaml` (gitignored, berisi sesi login cloud terenkripsi + config stream asli). |
-| go2rtc stream URL | `xiaomi://<account_id>:sg@192.168.1.7?did=<did>&model=mxiang.camera.c301` (nilai asli ada di `storage/go2rtc/go2rtc.yaml`, key stream `c301`) |
+| Cara akses | Lewat container `go2rtc` **standalone** (`docker-compose.yml`, image `alexxit/go2rtc:1.9.14`, **BUKAN** go2rtc bawaan Frigate yang versinya 1.9.10 dan belum support Xiaomi — dukungan `cs2` baru ada di go2rtc ≥1.9.13). Wajib `network_mode: host` karena protokol P2P butuh UDP hole-punching yang gagal di belakang NAT bridge Docker biasa (error kalau salah: `read punch: i/o timeout`). |
+| Login akun cloud | Mi Home account, **region `sg` (Singapura)** — bukan `cn`/China meski akun terdaftar dari Indonesia (Xiaomi tidak punya server khusus Indonesia, Asia Tenggara termasuk Indonesia dilayani server Singapura). `account_id` dan `did` (device ID) TIDAK ditulis di sini (repo publik) — cek `storage/go2rtc/go2rtc.yaml` (gitignored, berisi sesi login cloud terenkripsi + config stream asli). **Sesi login ini kedaluwarsa setelah ~2 minggu idle** (lihat Catatan). |
+| go2rtc stream URL | `xiaomi://<account_id>:sg@192.168.1.6?did=<did>&model=mxiang.camera.c301` (nilai asli ada di `storage/go2rtc/go2rtc.yaml`, key stream `c301`) |
 | go2rtc listen port | API/dashboard `1984`, RTSP restream `8556`, WebRTC `8557` (digeser dari default 8554/8555 supaya tidak bentrok dengan Frigate) |
 | Path yang dikonsumsi Frigate | `rtsp://host.docker.internal:8556/c301` (Frigate ada di bridge network Docker biasa, go2rtc host-networked, jadi dijembatani lewat `host.docker.internal` -> `extra_hosts: host-gateway` di `docker-compose.yml`) |
-| Video | **HEVC/H.265**, 2304x1296, audio Opus (di-transcode go2rtc dari format asli) |
+| Video | **HEVC/H.265**, sekarang 848x480 (sempat 2304x1296 di awal setup -- kemungkinan Mi Home app/camera menurunkan profil stream default, belum dikonfirmasi kenapa), audio Opus (di-transcode go2rtc dari format asli) |
 | Frigate key | `c301` |
 | Status Frigate | Non-prioritas (role `record` saja, tanpa `detect`) per keputusan user 2026-08-10 |
+| Catatan | **Insiden 2026-08-26**: koneksi P2P putus total (`read punch: i/o timeout`) setelah ~2 minggu jalan tanpa masalah. Root cause: sesi login cloud Xiaomi di `go2rtc.yaml` basi (16 hari tanpa refresh). Perbaikan: (1) upgrade go2rtc dari 1.9.13 ke **1.9.14** (rilis terbaru saat itu, changelog-nya eksplisit menyebut "Improve cs2+udp proto for xiaomi source" + "Add cache to xiaomi cloud logins" -- setelah upgrade, error berubah dari `miss: read punch` jadi cuma `read udp timeout`, tanda P2P handshake mulai berhasil), (2) **login ulang manual** lewat dashboard go2rtc (`/add.html`) dengan akun Mi Home yang sama -- ini yang benar-benar menyelesaikan masalah, sekaligus ketahuan IP kamera sudah berubah `.7`→`.6`. **Kalau kejadian serupa lagi**: coba login ulang dulu (paling mungkin fix-nya) sebelum curiga ke hal lain seperti router/firewall. |
 
 **Cara setup ulang / kamera Xiaomi Mi Home lain yang mirip (stock firmware, tanpa ONVIF):**
 1. Cek dulu apakah benar tidak ada ONVIF (`CAMERAS.md` prosedur ONVIF di atas) — kalau
