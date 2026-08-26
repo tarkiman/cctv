@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Panel CCTV</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 640px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      color: #1a1a1a;
+      background: #fafafa;
+    }
+    h1 { font-size: 1.4rem; }
+    .card {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .camera-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.6rem 0;
+      border-bottom: 1px solid #eee;
+    }
+    .camera-row:last-child { border-bottom: none; }
+    .camera-name { font-weight: 600; }
+    .badge {
+      font-size: 0.75rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      margin-left: 0.5rem;
+    }
+    .badge.on { background: #d1fae5; color: #065f46; }
+    .badge.off { background: #f3f4f6; color: #6b7280; }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background-color: #ccc;
+      border-radius: 999px;
+      transition: 0.15s;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      border-radius: 50%;
+      transition: 0.15s;
+    }
+    input:checked + .slider { background-color: #059669; }
+    input:checked + .slider:before { transform: translateX(20px); }
+    button {
+      background: #059669;
+      color: white;
+      border: none;
+      padding: 0.6rem 1.2rem;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    button:hover { background: #047857; }
+    .msg { padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem; }
+    .msg.ok { background: #d1fae5; color: #065f46; }
+    .msg.err { background: #fee2e2; color: #991b1b; }
+    .hint { color: #6b7280; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <h1>Panel CCTV</h1>
+  <p class="hint">Toggle kamera mana yang pakai AI object detection. Berlaku setelah Frigate restart otomatis (~10-20 detik).</p>
+
+  {% if message %}<div class="msg ok">{{ message }}</div>{% endif %}
+  {% if error %}<div class="msg err">{{ error }}</div>{% endif %}
+
+  <form method="post">
+    <div class="card">
+      {% for cam in cameras %}
+      <div class="camera-row">
+        <div>
+          <span class="camera-name">{{ cam }}</span>
+          {% if live_status.get(cam) is not none %}
+            <span class="badge {{ 'on' if live_status.get(cam) else 'off' }}">
+              status live: {{ 'aktif' if live_status.get(cam) else 'nonaktif' }}
+            </span>
+          {% endif %}
+        </div>
+        <label class="switch">
+          <input type="checkbox" name="{{ cam }}" {{ 'checked' if cam in current else '' }}>
+          <span class="slider"></span>
+        </label>
+      </div>
+      {% else %}
+      <p class="hint">Tidak ada kamera yang punya token deteksi di frigate/config.template.yml.</p>
+      {% endfor %}
+    </div>
+    <button type="submit">Simpan &amp; Terapkan</button>
+  </form>
+
+  <p class="hint" style="margin-top: 2rem;">
+    "status live" diambil langsung dari Frigate API saat halaman ini dimuat -- kalau
+    beda dengan toggle di atas, kemungkinan Frigate masih proses restart, refresh
+    halaman ini beberapa saat lagi.
+  </p>
+</body>
+</html>
