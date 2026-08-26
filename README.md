@@ -201,19 +201,40 @@ berat juga bisa memperlambat layanan lain di Pi ini.
 
 Hasil benchmark di `cam1` (1 kamera, CPU detector `type: cpu`):
 
-| Setting `detect`         | `skipped_fps` (dari `camera_fps` ~5.1) | CPU detector |
-|---------------------------|------------------------------------------|--------------|
-| 1280x720, fps 5 (awal)     | 2.4 (~47% frame di-skip)                 | ~220-230%    |
-| 640x360, fps 5 (final)      | 1.2 (~24% frame di-skip)                 | ~220%        |
+| Setting `detect`              | `skipped_fps` (dari `camera_fps` ~5.1) | CPU detector |
+|--------------------------------|------------------------------------------|--------------|
+| 1280x720, fps 5 (awal)          | 2.4 (~47% frame di-skip)                 | ~220-230%    |
+| 640x360, fps 5                   | 1.2 (~24% frame di-skip)                 | ~220%        |
 
 Turun resolusi `detect` cukup membantu (frame yang di-skip berkurang signifikan) tapi
 CPU detector tetap tinggi untuk 1 kamera saja — karena itu strategi yang dipakai:
 **AI detection hanya diaktifkan di kamera yang terdaftar di `DETECT_CAMERAS`** (lihat
 "Memilih kamera mana yang pakai AI detection" di atas), kamera non-prioritas permanen
 tidak punya role `detect` di ffmpeg sama sekali supaya tidak ada beban decode+inference
-tambahan. Cek `docker stats` dan `docker compose logs frigate` / layanan lain di Pi ini
-setiap kali menambah kamera ke `DETECT_CAMERAS`, dan turunkan `detect.fps` (mis. ke 3)
-kalau mulai terasa berat.
+tambahan.
+
+**Tuning lanjutan 2026-08-10** (dipicu monitoring resource user, dengan 3 kamera
+berjalan bersamaan — `bardi` satu-satunya yang detect-nya aktif): proses detector CPU
+sendirian konsisten pakai ~220-230% CPU (2.2+ dari 4 core Pi 5) hampir terus-menerus
+dengan `detectors.cpu1.num_threads: 3` + `detect.fps: 5`. Diturunkan jadi
+`num_threads: 2` + `fps: 3` untuk kamera prioritas (`cam1`, `bardi`):
+
+| Metrik (container `cctv-frigate`, 3 kamera aktif) | Sebelum | Sesudah |
+|-----------------------------------------------------|---------|---------|
+| `docker stats` CPU %                                 | ~184%   | ~130%   |
+| Proses detector individual (`docker exec ... top`)    | ~227%   | ~33%*   |
+| `skipped_fps` bardi                                    | ~0.3    | ~0.2    |
+
+\*Snapshot sesaat, proses detector memang bursty (aktif singkat lalu idle) — angka
+`docker stats` di atas (rata-rata per container) lebih representatif untuk
+perbandingan before/after.
+
+Kalau CPU masih terasa berat setelah ini, opsi lanjutan (urut dari dampak terkecil ke
+terbesar terhadap responsivitas deteksi): turunkan `fps` lagi (mis. ke 2), turunkan
+resolusi `detect` di bawah 640x360, atau — solusi paling tuntas — pasang Coral USB/PCIe
+TPU supaya inferensi lepas dari CPU sepenuhnya. Cek `docker stats` dan
+`docker compose logs frigate` / layanan lain di Pi ini setiap kali menambah kamera ke
+`DETECT_CAMERAS`.
 
 Kamera `bardi` (HEVC/H.265, 2304x1296) ternyata performanya lebih baik dari `cam1`
 (H.264, 1280x720) meski resolusi sumbernya jauh lebih besar — `skipped_fps` 0.0 vs 1.2
