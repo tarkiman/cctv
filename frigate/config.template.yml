@@ -140,7 +140,8 @@ cameras:
       track:
         - person
 
-  # Kamera "c301" (Xiaomi Smart Camera C301, 192.168.1.7) TIDAK bisa diakses lewat RTSP
+  # Kamera "c301" (Xiaomi Smart Camera C301, lihat CAMERAS.md utk IP terkini -- sudah
+  # pernah berubah) TIDAK bisa diakses lewat RTSP
   # atau ONVIF langsung (semua port tertutup) -- firmware stock Mi Home, bukan hasil
   # custom firmware seperti cam1/bardi. Satu-satunya jalan masuk: protokol P2P Xiaomi
   # (cs2) lewat go2rtc standalone (service `go2rtc` di docker-compose.yml, BUKAN go2rtc

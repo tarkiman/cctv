@@ -19,8 +19,13 @@ services:
   # gagal ("read punch: i/o timeout") kalau container ada di belakang NAT bridge Docker
   # biasa. Karena host networking, port listen go2rtc diatur manual di go2rtc.yaml jadi
   # 8556 (rtsp) dan 8557 (webrtc) supaya tidak bentrok dengan port Frigate (8554/8555).
+  #
+  # Sesi login cloud Xiaomi (storage/go2rtc/go2rtc.yaml) basi setelah ~2 minggu idle --
+  # kalau stream c301 mati dengan error "read udp ... i/o timeout" (bukan lagi
+  # "miss: read punch"), coba login ulang dulu lewat http://<ip-pi>:1984/add.html
+  # sebelum curiga ke jaringan/firewall. Insiden 2026-08-26: lihat CAMERAS.md.
   go2rtc:
-    image: alexxit/go2rtc:1.9.13
+    image: alexxit/go2rtc:1.9.14
     container_name: cctv-go2rtc
     restart: unless-stopped
     network_mode: host
