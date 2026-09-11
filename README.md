@@ -236,6 +236,30 @@ TPU supaya inferensi lepas dari CPU sepenuhnya. Cek `docker stats` dan
 `docker compose logs frigate` / layanan lain di Pi ini setiap kali menambah kamera ke
 `DETECT_CAMERAS`.
 
+**Tuning ronde ketiga, 2026-08-26** (dipicu `rpi-watchdog` yang terus lapor
+CPU_SATURATION 95-98% berulang selama ~15 menit, load average host naik ke 5.56):
+diturunkan lagi jadi `num_threads: 1` + `fps: 1` untuk `bardi` (satu-satunya kamera di
+`DETECT_CAMERAS` saat itu):
+
+| Metrik (container `cctv-frigate`) | Sebelum (num_threads:2, fps:2) | Sesudah (num_threads:1, fps:1) |
+|--------------------------------------|-----------------------------------|-----------------------------------|
+| `docker stats` CPU % (rata-rata beberapa sampel) | ~114% (106-165%)     | ~65% (61-69%, lebih stabil)     |
+| `inference_speed` per panggilan       | ~109ms                            | ~195ms (lebih lambat per panggilan, tapi jauh lebih jarang) |
+| `skipped_fps` bardi                    | 0.0                                | 0.0                                |
+| Load average host                      | ~5.56                              | ~3.80-4.16                        |
+
+Trade-off eksplisit ronde ini: deteksi orang baru di `bardi` bisa telat sampai ~1 detik
+lebih (fps:1) dibanding sebelumnya. Kalau ini mulai terasa mengganggu (mis. notifikasi
+kehadiran jadi berasa telat), opsi baliknya: naikkan `fps` balik ke 2 dulu sebelum
+naikkan `num_threads`, ukur lagi dampaknya ke `docker stats` seperti pola di atas —
+jangan naikkan keduanya sekaligus supaya jelas kontribusi masing-masing.
+
+Tiga ronde tuning ini sama-sama menekan biaya *inferensi* (CPU-bound, karena tidak ada
+Coral TPU) — kalau CPU masih jadi masalah setelah `fps:1`/`num_threads:1` (titik yang
+sudah cukup ekstrem untuk 1 kamera), kemungkinan besar bebannya bukan lagi dari
+Frigate/CCTV, melainkan dari service lain di Pi shared ini (cek `top`/`docker stats`
+tanpa filter kamera CCTV dulu sebelum tuning lebih jauh).
+
 Kamera `bardi` (HEVC/H.265, 2304x1296) ternyata performanya lebih baik dari `cam1`
 (H.264, 1280x720) meski resolusi sumbernya jauh lebih besar — `skipped_fps` 0.0 vs 1.2
 dengan setting `detect` yang sama (640x360/5fps). Jangan asumsikan resolusi source

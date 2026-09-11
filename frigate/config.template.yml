@@ -4,12 +4,13 @@ mqtt:
 
 # num_threads: 3 sebelumnya bikin proses detector CPU sendirian pakai ~220-230% CPU
 # (2.2+ dari 4 core Pi 5) hampir terus-menerus untuk 1 kamera prioritas -- diturunkan
-# ke 2 supaya tidak terlalu mendominasi CPU shared host ini (lihat "Catatan performa"
-# di README.md untuk data before/after).
+# ke 2, lalu ke 1 (2026-08-26, ronde ketiga tuning setelah watchdog Pi terus lapor
+# CPU_SATURATION 95-98% berulang) supaya tidak terlalu mendominasi CPU shared host ini
+# (lihat "Catatan performa" di README.md untuk data before/after tiap ronde).
 detectors:
   cpu1:
     type: cpu
-    num_threads: 2
+    num_threads: 1
 
 # Catatan hardware decode (Raspberry Pi 5):
 # Pi 5 hanya punya hardware decoder untuk HEVC/H.265, BUKAN H.264 seperti Pi 4.
@@ -143,7 +144,11 @@ cameras:
       height: 360
       # 5fps → 2fps: memotong beban TFLite AI detector 60%+ (dari 145% menjadi ~55%)
       # tanpa mengorbankan akurasi deteksi orang yang bergerak normal.
-      fps: 2
+      # 2fps → 1fps (2026-08-26, bersamaan num_threads 2→1): watchdog Pi terus lapor
+      # CPU_SATURATION 95-98% berulang meski sudah 2 ronde tuning sebelumnya. Trade-off
+      # deteksi orang baru bisa telat sampai ~1 detik lebih -- diterima demi stabilitas
+      # host shared ini (lihat "Catatan performa" README.md untuk data before/after).
+      fps: 1
     objects:
       track:
         - person
