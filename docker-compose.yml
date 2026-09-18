@@ -102,6 +102,7 @@ services:
   # Lihat README.md "Panel kontrol (browser)".
   panel:
     build: ./panel
+    image: ghcr.io/tarkiman/cctv-panel:${IMAGE_TAG:-latest}
     container_name: cctv-panel
     restart: unless-stopped
     depends_on:
@@ -117,6 +118,7 @@ services:
 
   timelapse:
     build: ./timelapse
+    image: ghcr.io/tarkiman/cctv-timelapse:${IMAGE_TAG:-latest}
     container_name: cctv-timelapse
     restart: unless-stopped
     depends_on:
