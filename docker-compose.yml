@@ -20,6 +20,13 @@ services:
   # biasa. Karena host networking, port listen go2rtc diatur manual di go2rtc.yaml jadi
   # 8556 (rtsp) dan 8557 (webrtc) supaya tidak bentrok dengan port Frigate (8554/8555).
   #
+  # DNS wajib pakai router (192.168.1.1), BUKAN default daemon.json (8.8.8.8/1.1.1.1):
+  # di jaringan rumah ini DNS UDP ke resolver publik itu di-drop/timeout (terbukti
+  # 2026-09-27: dari host 8.8.8.8 & 1.1.1.1 timeout, 192.168.1.1 OK). Akibatnya go2rtc
+  # gagal resolve account.xiaomi.com (login cloud Xiaomi) dan c301 mati total dengan
+  # error "lookup account.xiaomi.com on 1.1.1.1:53: i/o timeout" -- gejalanya MIRIP
+  # sesi kedaluwarsa, tapi login ulang tidak akan membantu. Cek DNS dulu.
+  #
   # Sesi login cloud Xiaomi (storage/go2rtc/go2rtc.yaml) basi setelah ~2 minggu idle --
   # kalau stream c301 mati dengan error "read udp ... i/o timeout" (bukan lagi
   # "miss: read punch"), coba login ulang dulu lewat http://<ip-pi>:1984/add.html
@@ -29,6 +36,8 @@ services:
     container_name: cctv-go2rtc
     restart: unless-stopped
     network_mode: host
+    dns:
+      - 192.168.1.1
     volumes:
       - ./storage/go2rtc:/config
 
