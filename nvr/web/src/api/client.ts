@@ -1,5 +1,6 @@
 import type {
   Camera,
+  Device,
   ExportEstimate,
   RecordingAt,
   Recording,
@@ -8,6 +9,7 @@ import type {
   Timeline,
   TimelapseItem,
   User,
+  UserItem,
   WorkerStatus,
 } from './types'
 
@@ -59,6 +61,15 @@ export const api = {
   me: () => request<User>('GET', '/auth/me'),
   changePassword: (current_password: string, new_password: string) =>
     request<void>('PUT', '/auth/password', { current_password, new_password }),
+
+  sessions: () => request<Device[]>('GET', '/auth/sessions'),
+  deleteSession: (id: string) => request<void>('DELETE', `/auth/sessions/${encodeURIComponent(id)}`),
+  logoutOthers: () => request<void>('POST', '/auth/sessions/logout-others'),
+
+  users: () => request<UserItem[]>('GET', '/users'),
+  createUser: (username: string, password: string, role: UserItem['role']) => request<UserItem[]>('POST', '/users', { username, password, role }),
+  updateUser: (id: number, patch: { role?: UserItem['role']; password?: string }) => request<UserItem[]>('PATCH', `/users/${id}`, patch),
+  deleteUser: (id: number) => request<UserItem[]>('DELETE', `/users/${id}`),
 
   cameras: () => request<Camera[]>('GET', '/cameras'),
   camera: (id: number) => request<Camera>('GET', `/cameras/${id}`),

@@ -59,3 +59,43 @@ func (s *UserStore) SetPassword(ctx context.Context, id int64, passwordHash stri
 		passwordHash, now(), id)
 	return err
 }
+
+// UserSummary is a user with activity figures, for the admin user list.
+type UserSummary struct {
+	User
+	Sessions int   `db:"sessions"`
+	LastSeen int64 `db:"last_seen"`
+}
+
+func (s *UserStore) List(ctx context.Context) ([]UserSummary, error) {
+	var out []UserSummary
+	err := s.db.SelectContext(ctx, &out, `
+		SELECT u.id, u.username, u.password_hash, u.role, u.created_at, u.updated_at,
+		       COUNT(s.id) AS sessions, COALESCE(MAX(s.last_seen), 0) AS last_seen
+		FROM users u LEFT JOIN sessions s ON s.user_id = u.id AND s.expires_at > ?
+		GROUP BY u.id ORDER BY u.role, u.username`, now())
+	return out, err
+}
+
+func (s *UserStore) CountAdmins(ctx context.Context) (int, error) {
+	var n int
+	err := s.db.GetContext(ctx, &n, `SELECT COUNT(*) FROM users WHERE role = 'admin'`)
+	return n, err
+}
+
+func (s *UserStore) SetRole(ctx context.Context, id int64, role string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE users SET role = ?, updated_at = ? WHERE id = ?`, role, now(), id)
+	return err
+}
+
+// Delete removes a user; their sessions go with them (ON DELETE CASCADE).
+func (s *UserStore) Delete(ctx context.Context, id int64) error {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}

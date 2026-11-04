@@ -9,6 +9,8 @@ import { useCameras } from '../stores/cameras'
 import { useToast } from '../stores/toast'
 import { fmtBytes } from '../utils/format'
 import { loadPref, savePref } from '../utils/prefs'
+import UsersSection from '../components/UsersSection.vue'
+import DevicesSection from '../components/DevicesSection.vue'
 
 const auth = useAuth()
 const cams = useCameras()
@@ -251,6 +253,8 @@ const input = 'w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm outl
       </form>
     </section>
 
+    <UsersSection v-if="isAdmin" />
+
     <!-- Appearance -->
     <section class="mb-8" aria-labelledby="look-h">
       <h2 id="look-h" class="mb-3 text-base font-semibold">Tampilan</h2>
@@ -292,6 +296,7 @@ const input = 'w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm outl
           </button>
         </div>
       </form>
+      <DevicesSection />
     </section>
   </div>
 </template>

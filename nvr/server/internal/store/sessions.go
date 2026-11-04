@@ -57,3 +57,37 @@ func (s *SessionStore) DeleteExpired(ctx context.Context) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE expires_at <= ?`, now())
 	return err
 }
+
+// Device is a session as shown to its owner.
+type Device struct {
+	ID        string `db:"id"`
+	CreatedAt int64  `db:"created_at"`
+	LastSeen  int64  `db:"last_seen"`
+	UserAgent string `db:"user_agent"`
+	IP        string `db:"ip"`
+}
+
+func (s *SessionStore) ListByUser(ctx context.Context, userID int64) ([]Device, error) {
+	var out []Device
+	err := s.db.SelectContext(ctx, &out, `
+		SELECT id, created_at, last_seen, COALESCE(user_agent, '') AS user_agent, COALESCE(ip, '') AS ip
+		FROM sessions WHERE user_id = ? AND expires_at > ? ORDER BY last_seen DESC`, userID, now())
+	return out, err
+}
+
+// DeleteForUser removes one session, only if it belongs to userID.
+func (s *SessionStore) DeleteForUser(ctx context.Context, userID int64, id string) error {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE id = ? AND user_id = ?`, id, userID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *SessionStore) DeleteAllForUser(ctx context.Context, userID int64) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ?`, userID)
+	return err
+}

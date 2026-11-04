@@ -29,6 +29,13 @@ kecuali `POST /auth/login` dan `GET /healthz` butuh sesi.
 | `POST` | `/auth/logout` | Hapus sesi saat ini |
 | `GET` | `/auth/me` | `{id, username, role}` |
 | `PUT` | `/auth/password` | `{current_password, new_password}` |
+| `GET` | `/auth/sessions` | Perangkat (sesi) milik pengguna ini; `current` menandai perangkat yang dipakai |
+| `DELETE` | `/auth/sessions/{id}` | Keluarkan satu perangkat sendiri (bukan perangkat ini) |
+| `POST` | `/auth/sessions/logout-others` | Keluarkan semua perangkat lain |
+| `GET` | `/users` | Daftar pengguna + jumlah perangkat aktif & terakhir aktif (admin) |
+| `POST` | `/users` | `{username, password, role}`; username 3–32 `[a-z0-9._-]`, password ≥ 10 (admin) |
+| `PATCH` | `/users/{id}` | `{role?, password?}`; reset password mengeluarkan semua perangkat pengguna itu. Tidak bisa mengubah akun sendiri atau menurunkan admin terakhir (admin) |
+| `DELETE` | `/users/{id}` | Hapus pengguna (bukan diri sendiri, bukan admin terakhir) (admin) |
 
 ## Kamera
 

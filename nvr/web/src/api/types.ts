@@ -120,3 +120,21 @@ export interface ExportEstimate {
   segments: number
   gap_seconds: number
 }
+
+export interface UserItem {
+  id: number
+  username: string
+  role: 'admin' | 'viewer'
+  sessions: number
+  last_seen: string | null
+  created_at: string
+}
+
+export interface Device {
+  id: string
+  current: boolean
+  user_agent: string
+  ip: string
+  created_at: string
+  last_seen: string
+}
