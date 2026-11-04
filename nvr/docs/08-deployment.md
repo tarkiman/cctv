@@ -6,7 +6,8 @@
 > (container tetap ada untuk rollback). Rincian yang berbeda dari rencana di bawah:
 > data di `/DATA/cctv/nvr` (bukan `/DATA/nvr`, karena butuh `sudo`), checkout di
 > `~/cctv-nvr` (clone HTTPS, repo publik), dan image dikirim langsung dari Pi
-> (`docker save | ssh umma docker load`) karena workflow CI `nvr.yml` belum dibuat.
+> (`docker save | ssh umma docker load`) sampai workflow CI `nvr.yml` dibuat
+> (2026-11-04); sejak itu image diambil dari GHCR.
 
 Target: STB `umma` (`tarkiman@192.168.1.20`, ZeroTier `172.22.244.135`), Armbian
 bookworm, arm64. Deploy **selalu diambil dari branch `nvr-lite`** sampai branch ini
@@ -60,11 +61,13 @@ akan memakai varian image terpisah (`-detect`).
 
 ## CI
 
-Workflow baru `.github/workflows/nvr.yml`:
-- Trigger: `push` ke `nvr-lite` dengan perubahan di `nvr/**`, dan `workflow_dispatch`.
-- Job: `go vet` + `go test` + `npm run lint && npm run test` → build multi-arch
-  (`linux/arm64`, `linux/amd64`) → push
-  `ghcr.io/tarkiman/cctv-nvr:nvr-lite` dan `:<sha>`.
+Workflow `.github/workflows/nvr.yml`:
+- Trigger: `push` ke `nvr-lite` dengan perubahan di `nvr/**`, pull request, dan
+  `workflow_dispatch`.
+- Job `test`: `npm run build` (termasuk `vue-tsc`), `gofmt`, `go vet`, `go test -race`.
+- Job `image`: build **arm64 saja** di runner native `ubuntu-24.04-arm` (umma dan Pi
+  sama-sama arm64; build lewat QEMU lambat), push
+  `ghcr.io/tarkiman/cctv-nvr:nvr-lite` dan `:<sha7>`. Versi di halaman Status = sha7.
 - Notifikasi Discord memakai pola yang sama dengan `deploy.yml` (secret
   `DISCORD_WEBHOOK`).
 
@@ -162,6 +165,26 @@ tertentu: `NVR_TAG=<sha> docker compose up -d`.
 - [ ] CPU total `nvrd`+`go2rtc`+ffmpeg sesuai target di
       [01 — Tujuan](01-tujuan-dan-lingkup.md#kebutuhan-non-fungsional); swap tidak habis.
 - [ ] Container `aiplatform` tidak terganggu.
+
+## Notifikasi
+
+Diatur lewat `.env` (lihat `.env.example`), lalu `docker compose up -d nvrd`:
+
+| Variabel | Isi |
+|---|---|
+| `NVR_NOTIFY_WEBHOOK` | Satu atau lebih URL (pisahkan koma). Discord webhook → embed; gowa `…/send/message?phone=62…` → pesan WhatsApp (user:password di URL jadi basic auth); URL lain → JSON generik. |
+| `NVR_NOTIFY_OFFLINE_MINUTES` | Lama kamera mati sebelum dikirim alert (default 5). |
+| `NVR_PUBLIC_URL` | Basis tautan di pesan, mis. `https://cctv.tarkiman.com`. |
+
+Yang dikirim:
+- Kamera tidak merekam ≥ 5 menit: satu alert per kejadian, pesan dari `health.Explain`;
+  bila penyebabnya sesi Xiaomi, judulnya "sesi Xiaomi perlu login ulang".
+  Saat pulih: satu pesan berisi lama matinya.
+- Disk bebas < setengah batas retensi (`min_free_percent`, default 10% → alert < 5%),
+  karena di atas itu retensi sendiri yang menjaga ruang; pulih saat ≥ batas.
+- "NVR Lite aktif" setiap nvrd start (memastikan pulih setelah reboot/deploy).
+
+Tombol **Kirim pesan tes** ada di halaman Status (admin).
 
 ## Rollback
 

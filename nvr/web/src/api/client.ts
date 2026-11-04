@@ -74,6 +74,7 @@ export const api = {
 
   stats: () => request<SystemStats>('GET', '/system/stats'),
   workers: () => request<WorkerStatus[]>('GET', '/system/status'),
+  notifyTest: () => request<void>('POST', '/system/notify-test'),
   settings: () => request<Settings>('GET', '/settings'),
   saveSettings: (s: Partial<Settings>) => request<Settings>('PUT', '/settings', s),
 

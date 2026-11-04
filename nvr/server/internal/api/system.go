@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/tarkiman/cctv/nvr/server/internal/notify"
 	"github.com/tarkiman/cctv/nvr/server/internal/store"
 )
 
@@ -53,6 +54,7 @@ func (s *Server) systemStats(w http.ResponseWriter, r *http.Request) {
 		"version":        s.Version,
 		"go2rtc_version": s.Go2rtc.Version(r.Context()),
 		"timezone":       s.Config.Location.String(),
+		"notify_targets": len(s.Config.NotifyWebhooks),
 	})
 }
 
@@ -120,4 +122,24 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 			send("camera.status", st)
 		}
 	})
+}
+
+// notifyTest sends a test message to every configured webhook.
+func (s *Server) notifyTest(w http.ResponseWriter, r *http.Request) {
+	if !s.Notifier.Enabled() {
+		writeError(w, http.StatusConflict, "notify_disabled", "Notifikasi belum diatur. Isi NVR_NOTIFY_WEBHOOK di .env lalu restart nvrd.")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	err := s.Notifier.Send(ctx, notify.Message{
+		Kind: "test", Level: notify.Info, Title: "Tes notifikasi NVR Lite",
+		Text: "Kalau pesan ini sampai, notifikasi kamera offline dan disk penuh akan dikirim ke sini.",
+		URL:  s.Config.PublicURL,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "notify_failed", "Gagal mengirim: "+err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

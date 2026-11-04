@@ -16,23 +16,25 @@ import (
 	"github.com/tarkiman/cctv/nvr/server/internal/config"
 	"github.com/tarkiman/cctv/nvr/server/internal/go2rtc"
 	"github.com/tarkiman/cctv/nvr/server/internal/health"
+	"github.com/tarkiman/cctv/nvr/server/internal/notify"
 	"github.com/tarkiman/cctv/nvr/server/internal/sse"
 	"github.com/tarkiman/cctv/nvr/server/internal/store"
 	"github.com/tarkiman/cctv/nvr/server/internal/sysinfo"
 )
 
 type Server struct {
-	Config  *config.Config
-	Store   *store.Store
-	Auth    *auth.Service
-	Go2rtc  *go2rtc.Client
-	Health  *health.Tracker
-	Cameras *camera.Manager
-	Hub     *sse.Hub
-	Sys     *sysinfo.Sampler
-	Web     fs.FS
-	Version string
-	Log     *slog.Logger
+	Config   *config.Config
+	Store    *store.Store
+	Auth     *auth.Service
+	Go2rtc   *go2rtc.Client
+	Health   *health.Tracker
+	Cameras  *camera.Manager
+	Hub      *sse.Hub
+	Sys      *sysinfo.Sampler
+	Notifier *notify.Notifier
+	Web      fs.FS
+	Version  string
+	Log      *slog.Logger
 }
 
 func (s *Server) Routes() http.Handler {
@@ -85,6 +87,7 @@ func (s *Server) Routes() http.Handler {
 					r.Get("/system/status", s.systemStatus)
 					r.Get("/settings", s.getSettings)
 					r.Put("/settings", s.putSettings)
+					r.Post("/system/notify-test", s.notifyTest)
 				})
 			})
 		})

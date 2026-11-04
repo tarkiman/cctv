@@ -28,6 +28,13 @@ type Config struct {
 	// Extra browser origins (host patterns) allowed to open the live websocket, for
 	// access through a reverse proxy that rewrites Host, e.g. "cctv.tarkiman.com".
 	AllowedOrigins []string
+	// Webhooks for alerts (comma-separated). Discord webhook URLs get Discord embeds;
+	// other URLs get generic JSON.
+	NotifyWebhooks []string
+	// How long a camera must be down before it alerts.
+	NotifyOfflineAfter time.Duration
+	// Public base URL used for links in notifications, e.g. https://cctv.tarkiman.com.
+	PublicURL string
 }
 
 func Load() (*Config, error) {
@@ -67,6 +74,20 @@ func Load() (*Config, error) {
 			c.AllowedOrigins = append(c.AllowedOrigins, o)
 		}
 	}
+	for _, u := range strings.Split(os.Getenv("NVR_NOTIFY_WEBHOOK"), ",") {
+		if u = strings.TrimSpace(u); u != "" {
+			if !strings.HasPrefix(u, "https://") && !strings.HasPrefix(u, "http://") {
+				return nil, fmt.Errorf("NVR_NOTIFY_WEBHOOK: %q is not an http(s) URL", u)
+			}
+			c.NotifyWebhooks = append(c.NotifyWebhooks, u)
+		}
+	}
+	mins, err := strconv.Atoi(env("NVR_NOTIFY_OFFLINE_MINUTES", "5"))
+	if err != nil || mins < 1 {
+		return nil, fmt.Errorf("NVR_NOTIFY_OFFLINE_MINUTES must be an integer >= 1")
+	}
+	c.NotifyOfflineAfter = time.Duration(mins) * time.Minute
+	c.PublicURL = strings.TrimRight(os.Getenv("NVR_PUBLIC_URL"), "/")
 	return c, nil
 }
 

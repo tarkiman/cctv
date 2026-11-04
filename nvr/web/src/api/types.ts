@@ -101,6 +101,7 @@ export interface SystemStats {
   version: string
   go2rtc_version: string
   timezone: string
+  notify_targets: number
 }
 
 export interface WorkerStatus {

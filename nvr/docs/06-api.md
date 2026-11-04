@@ -131,7 +131,8 @@ terdekat.
 |---|---|---|
 | `GET` | `/healthz` | Tanpa auth. `200 ok` bila DB dan go2rtc bisa dihubungi |
 | `GET` | `/system/status` | Status worker per kamera, 50 baris log ffmpeg terakhir (admin) |
-| `GET` | `/system/stats` | CPU, RAM, load, disk `/data`, ukuran rekaman per kamera, versi |
+| `GET` | `/system/stats` | CPU, RAM, load, disk `/data`, ukuran rekaman per kamera, versi, jumlah tujuan notifikasi |
+| `POST` | `/system/notify-test` | Kirim pesan tes ke semua webhook notifikasi; `204`, `409` bila belum diatur, `502` bila gagal (admin) |
 | `GET` | `/settings` | Pengaturan global |
 | `PUT` | `/settings` | Ubah pengaturan global (admin) |
 | `GET/POST/PATCH/DELETE` | `/users[/{id}]` | Fase 2. Kelola pengguna (admin) |

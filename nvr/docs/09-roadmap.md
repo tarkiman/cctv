@@ -44,7 +44,7 @@ Kriteria selesai:
 - UI kelola kamera + tes koneksi + sinkron ke go2rtc.
 - Pengaturan rekaman & retensi dengan perkiraan disk.
 - Export klip.
-- Notifikasi webhook: kamera offline > 5 menit, disk < 10%, sesi Xiaomi `c301`
+- ✅ Notifikasi webhook (2026-11-04): kamera offline > 5 menit, disk < 10%, sesi Xiaomi `c301`
   kemungkinan kedaluwarsa (termasuk pengingat proaktif di hari ke-14).
 - Multi-user (admin/viewer), ganti password.
 - PWA (install, ikon, offline shell).

@@ -25,6 +25,7 @@ import (
 	"github.com/tarkiman/cctv/nvr/server/internal/ffmpeg"
 	"github.com/tarkiman/cctv/nvr/server/internal/go2rtc"
 	"github.com/tarkiman/cctv/nvr/server/internal/health"
+	"github.com/tarkiman/cctv/nvr/server/internal/notify"
 	"github.com/tarkiman/cctv/nvr/server/internal/recorder"
 	"github.com/tarkiman/cctv/nvr/server/internal/retention"
 	"github.com/tarkiman/cctv/nvr/server/internal/snapshot"
@@ -103,11 +104,26 @@ func run() error {
 		Log: log.With("component", "retention")}).Run(ctx)
 	go housekeeping(ctx, st, database, cfg, log)
 
+	notifier := notify.New(cfg.NotifyWebhooks, log.With("component", "notify"))
+	go (&notify.Watcher{
+		Notifier: notifier, Store: st, Health: tracker, PublicURL: cfg.PublicURL,
+		Disk:         func() (uint64, uint64) { return sysinfo.Disk(cfg.DataDir) },
+		OfflineAfter: cfg.NotifyOfflineAfter, Interval: 30 * time.Second,
+		Log: log.With("component", "notify"),
+	}).Run(ctx)
+	if notifier.Enabled() {
+		// Confirms that the box came back after a reboot or deploy.
+		go notifier.Send(ctx, notify.Message{
+			Kind: "startup", Level: notify.Info, Title: "NVR Lite aktif",
+			Text: "nvrd " + version + " berjalan.", URL: cfg.PublicURL,
+		})
+	}
+
 	srv := &http.Server{
 		Addr: cfg.Listen,
 		Handler: (&api.Server{
 			Config: cfg, Store: st, Auth: authSvc, Go2rtc: g2r, Health: tracker, Cameras: mgr,
-			Hub: hub, Sys: &sysinfo.Sampler{}, Web: web.FS(), Version: version, Log: log,
+			Hub: hub, Sys: &sysinfo.Sampler{}, Notifier: notifier, Web: web.FS(), Version: version, Log: log,
 		}).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,

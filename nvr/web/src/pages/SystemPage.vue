@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Cpu, HardDrive, MemoryStick, RefreshCw, Server } from 'lucide-vue-next'
+import { Bell, Cpu, HardDrive, LoaderCircle, MemoryStick, RefreshCw, Server } from 'lucide-vue-next'
 import { api } from '../api/client'
 import type { SystemStats, WorkerStatus } from '../api/types'
 import { useAuth } from '../stores/auth'
 import { useCameras } from '../stores/cameras'
+import { useToast } from '../stores/toast'
 import { fmtBytes, fmtDateTime, fmtDuration, fmtRelative } from '../utils/format'
 import StatusBadge from '../components/StatusBadge.vue'
 
@@ -14,6 +15,20 @@ const stats = ref<SystemStats | null>(null)
 const workers = ref<WorkerStatus[]>([])
 const error = ref('')
 const openLog = ref<number | null>(null)
+const toast = useToast()
+const testing = ref(false)
+
+async function testNotify() {
+  testing.value = true
+  try {
+    await api.notifyTest()
+    toast.ok('Pesan tes terkirim. Cek aplikasi tujuan notifikasi.')
+  } catch (e) {
+    toast.error((e as Error).message)
+  } finally {
+    testing.value = false
+  }
+}
 let timer: number | undefined
 
 async function refresh() {
@@ -84,9 +99,27 @@ onBeforeUnmount(() => clearInterval(timer))
           <p class="text-2xl font-bold">{{ fmtDuration(host.uptime_seconds) }}</p>
           <p class="text-xs text-muted">nvrd {{ stats?.version }} · go2rtc {{ stats?.go2rtc_version || '—' }}</p>
         </div>
+        <div class="rounded-[var(--radius-card)] border border-line bg-surface p-4">
+          <p class="mb-1 flex items-center gap-2 text-sm text-muted"><Bell class="size-4" aria-hidden="true" /> Notifikasi</p>
+          <p class="text-2xl font-bold">{{ stats?.notify_targets ? 'Aktif' : 'Belum diatur' }}</p>
+          <p v-if="!stats?.notify_targets" class="text-xs text-muted">Isi <code>NVR_NOTIFY_WEBHOOK</code> di .env lalu restart.</p>
+          <template v-else>
+            <p class="text-xs text-muted">{{ stats.notify_targets }} tujuan · offline, sesi Xiaomi, disk</p>
+            <button
+              v-if="auth.user?.role === 'admin'"
+              type="button"
+              class="mt-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold text-primary hover:bg-surface-2 disabled:opacity-60"
+              :disabled="testing"
+              @click="testNotify"
+            >
+              <LoaderCircle v-if="testing" class="size-3.5 animate-spin" aria-hidden="true" />
+              Kirim pesan tes
+            </button>
+          </template>
+        </div>
       </template>
       <template v-else>
-        <div v-for="i in 4" :key="i" class="skeleton h-28 rounded-[var(--radius-card)]" />
+        <div v-for="i in 5" :key="i" class="skeleton h-28 rounded-[var(--radius-card)]" />
       </template>
     </div>
 
