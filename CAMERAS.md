@@ -62,7 +62,7 @@ standar ONVIF (WS-Discovery UDP probe + SOAP dengan `UsernameToken`/`PasswordDig
 
 | | |
 |---|---|
-| IP | `192.168.1.2` (per 2026-09-11; riwayat: `.7`→`.6`→`.2` dalam ~1 bulan -- kuat menunjukkan DHCP biasa, bukan reservation, lihat catatan CAMERAS.md cam1). MAC `50:7B:91:79:02:CA` (tetap sama tiap kali, konfirmasi device fisik sama). |
+| IP | `192.168.1.4` (per 2026-11-04; riwayat: `.7`→`.6`→`.2`→`.4` dalam ~1 bulan -- kuat menunjukkan DHCP biasa, bukan reservation, lihat catatan CAMERAS.md cam1). MAC `50:7B:91:79:02:CA` (tetap sama tiap kali, konfirmasi device fisik sama). |
 | Model | Xiaomi Smart Camera C301 (model code go2rtc/cloud: `mxiang.camera.c301`) |
 | Firmware | **Stock Mi Home** — bukan custom firmware seperti cam1/bardi. Tidak ada opsi ONVIF di app kameranya sama sekali. |
 | Web UI / SSH / Telnet / RTSP / ONVIF langsung | **Semua tertutup** — port 80, 22, 23, 554, 8554, 10000 semuanya closed/filtered dari Pi ini. Satu-satunya jalan masuk: protokol P2P proprietary Xiaomi (disebut `cs2` di go2rtc). |

@@ -38,7 +38,7 @@ ARG VERSION=dev
 RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/nvrd ./cmd/nvrd
 
 FROM alpine:3.22
-RUN apk add --no-cache ffmpeg tzdata ca-certificates && adduser -D -u 1000 nvr
+RUN apk add --no-cache ffmpeg tzdata ca-certificates && adduser -D -u 1001 nvr   # samakan dengan uid pemilik /DATA/nvr di host
 COPY --from=server /out/nvrd /usr/local/bin/nvrd
 USER nvr
 ENV TZ=Asia/Jakarta NVR_DATA_DIR=/data
@@ -110,7 +110,7 @@ Dashboard go2rtc (untuk login ulang Xiaomi `c301`) dibuka lewat tunnel:
 
 ```bash
 # di umma
-sudo mkdir -p /DATA/nvr/go2rtc && sudo chown -R 1000:1000 /DATA/nvr
+sudo mkdir -p /DATA/nvr/go2rtc && sudo chown -R 1001:1001 /DATA/nvr   # uid tarkiman di umma = 1001
 git clone -b nvr-lite git@github.com:tarkiman/cctv.git ~/cctv-nvr
 cd ~/cctv-nvr/nvr/deploy
 cp .env.example .env                       # isi NVR_ADMIN_USER / NVR_ADMIN_PASSWORD

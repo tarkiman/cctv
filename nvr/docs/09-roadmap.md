@@ -26,7 +26,7 @@ diperbarui bila ada asumsi yang salah.
 - Auth: admin pertama dari env, login/logout, sesi, rate limit.
 - Kamera dari seed/`go2rtc.yaml` (UI kelola kamera di fase 2).
 - Recorder + indexer + remux + pemulihan `.ts` yatim; supervisor dengan backoff.
-- Retensi (umur + watermark disk).
+- Retensi (umur + watermark disk). URL sumber dibangun dengan `net/url` (password bisa mengandung `@`).
 - Snapshot per menit + timelapse harian.
 - Health + SSE; halaman Status.
 - Halaman Login, Live, Satu kamera (live + playback dengan timeline), Timelapse.
@@ -66,13 +66,35 @@ Kriteria selesai:
 
 ## Hasil spike
 
-_Diisi setelah Fase 0 dijalankan._
+Dijalankan di `umma` 2026-11-04 malam (19:15–19:35 WIB+1), ffmpeg 6.1.2 dari Alpine
+3.22, go2rtc 1.9.14. `cam1` sedang offline sehingga hanya `bardi` dan `c301` yang diuji.
+Pembanding: Frigate di mesin yang sama memakai 123–215% CPU dan 460–580 MB RAM.
 
-| # | Hasil | Tanggal |
+| # | Hasil | Status |
 |---|---|---|
-| S1 | | |
-| S2 | | |
-| S3 | | |
-| S4 | | |
-| S5 | | |
-| S6 | | |
+| S1 | 2 recorder `-c copy` + go2rtc, rata-rata 9 menit: `bardi` 3,2% CPU / 21 MB, `c301` 4,0% / 21 MB, go2rtc 8,8% / 13 MB. **Total ~16% CPU, ~55 MB RAM.** RAM tersedia host naik dari 660 MB ke 1,2 GB. Ukuran (malam hari): `bardi` ~2,4 MB/menit (~3,4 GB/hari), `c301` ~0,8 MB/menit (~1,2 GB/hari). | Lolos |
+| S2 | `-segment_list pipe:1 -segment_list_type csv` mengeluarkan satu baris per segmen selesai (`nama,mulai,akhir`). Remux `.ts`→`.mp4` segmen 60 s: ~1,2 s, ~1 s CPU; `moov` di depan `mdat` (siap seek); perlu `-tag:v hvc1` untuk HEVC agar Safari mau memutar. Seek ke detik 40 dengan ffmpeg ~1 s. | Lolos (seek di browser menunggu S4) |
+| S3 | Snapshot `-skip_frame nokey`: 2,3–3,3 s per pengambilan (menunggu keyframe), CPU < 1 s. Untuk 1 snapshot/menit/kamera ≈ 1–2% satu core. | Lolos |
+| S4 | Belum. Butuh uji di HP & laptop pengguna; file uji sudah disiapkan di `/DATA/cctv/nvr-spike/web/`. | Tertunda |
+| S5 | `PUT /api/streams?name=&src=` **ditulis ke `go2rtc.yaml`** (persisten). `PATCH` hanya mengubah memori, tidak ditulis ke file. Gunakan `PUT` (atau `DELETE` + `PUT`) untuk sinkronisasi. | Lolos, dengan catatan |
+| S6 | Decode `bardi_sub` (H.264 640x360) → `fps=2,scale=320,gray`: ~7 s CPU per 60 s (~12% satu core, ~3% total). Hanya keyframe: ~2,6 s per 60 s (~4% satu core). | Lolos |
+
+### Temuan tambahan
+- **Password dengan karakter khusus.** Password `bardi` mengandung `@`; URL RTSP harus
+  di-percent-encode (`%40`) sebelum dikirim ke go2rtc/ffmpeg. `nvrd` wajib membangun URL
+  dengan `net/url` (`url.UserPassword`), bukan penggabungan string.
+- **Timestamp kosong.** ffmpeg memperingatkan "Timestamps are unset" untuk `bardi`. Tambah
+  `-fflags +genpts` pada input recorder (Frigate juga memakai `+genpts` dan
+  `-use_wallclock_as_timestamps 1`); validasi di Fase 1.
+- **Batas segmen.** Dengan `-segment_atclocktime 1` segmen dipotong di keyframe pertama
+  setelah batas jam (mis. `11:19:03`), bukan tepat di detik `:00`. Waktu mulai harus
+  diambil dari CSV/nama file, bukan diasumsikan.
+- **IP kamera berubah lagi.** `c301` pindah dari `.2` ke `.4`; `cam1` tidak terjangkau
+  di `.14` maupun alamat lain (port 8554 tidak ada yang terbuka). Reservasi DHCP di router
+  makin penting; fitur "cari ulang kamera berdasarkan MAC" layak masuk Fase 2.
+- **Izin `/DATA`.** User `tarkiman` (uid 1001 di `umma`, bukan 1000) tidak bisa membuat
+  folder langsung di `/DATA`; butuh `sudo` sekali untuk `/DATA/nvr`. Container harus
+  berjalan sebagai uid 1001 atau folder di-`chown` ke uid container.
+- **Kapasitas disk jauh lebih longgar** dari perkiraan awal: bila angka siang hari mirip,
+  3 kamera 24 jam hanya ~5–10 GB/hari, sehingga retensi 30 hari pun muat. Perlu diukur
+  ulang di siang hari.

@@ -60,11 +60,11 @@ proxy `nvrd` (satu origin, satu mekanisme login). Detail di
 
 ### Rekaman
 1. `recorder` menjalankan per kamera:
-   `ffmpeg -rtsp_transport tcp -i rtsp://127.0.0.1:8556/<stream> -map 0:v -c:v copy -an
+   `ffmpeg -rtsp_transport tcp -fflags +genpts -i rtsp://127.0.0.1:8556/<stream> -map 0:v -c:v copy -an
    -f segment -segment_time 600 -segment_atclocktime 1 -strftime 1
    -segment_list pipe:1 -segment_list_type csv <dir>/%Y%m%dT%H%M%S.ts`
 2. Saat satu segmen selesai, ffmpeg menulis satu baris CSV ke stdout. `nvrd` membacanya,
-   me-remux `.ts` → `.mp4` (`-c copy -movflags +faststart`, hanya I/O), menghapus `.ts`,
+   me-remux `.ts` → `.mp4` (`-c copy -tag:v hvc1|avc1 -movflags +faststart`, hanya I/O), menghapus `.ts`,
    lalu mencatat segmen ke tabel `recordings`.
 3. Kalau ffmpeg mati, supervisor menyalakan ulang dengan backoff eksponensial
    (1 s → maks 60 s) dan menandai kamera `degraded`/`offline`.
@@ -108,16 +108,17 @@ sekitarnya ditandai `protected` agar tidak terhapus oleh retensi biasa.
 Nama folder tanggal memakai **WIB** supaya mudah dibaca manusia; kolom waktu di database
 tetap UTC.
 
-## Perkiraan kapasitas disk
+## Kapasitas disk
 
-Belum diukur — bitrate asli diukur di spike Fase 0. Perkiraan kasar:
+Diukur di spike S1 (malam hari, 2026-11-04); angka siang hari kemungkinan lebih besar
+karena lebih banyak detail/gerak:
 
-| Kamera | Stream rekaman | Bitrate (perkiraan) | Per hari |
+| Kamera | Stream rekaman | Terukur | Per hari |
 |---|---|---|---|
-| `cam1` | H.264 1280x720 | 1–2 Mbps | 10–20 GB |
-| `bardi` | HEVC 2304x1296 | ~2 Mbps | ~20 GB |
-| `c301` | HEVC 848x480 | ~0,5 Mbps | ~5 GB |
+| `cam1` | H.264 1280x720 | belum (kamera offline) | perkiraan 5–15 GB |
+| `bardi` | HEVC 2304x1296 | ~2,4 MB/menit (~0,3 Mbps) | ~3,4 GB |
+| `c301` | HEVC 848x480 | ~0,8 MB/menit (~0,1 Mbps) | ~1,2 GB |
 
-Dengan sisa ~320 GB di `/DATA`, rekaman 24 jam semua kamera kira-kira muat 6–9 hari.
-Default retensi: 5 hari kontinu, 30 hari untuk segmen yang berisi event. Batas aman:
+Dengan sisa ~320 GB di `/DATA`, rekaman 24 jam semua kamera muat jauh lebih dari 30 hari.
+Default retensi: 14 hari kontinu, 30 hari untuk segmen yang berisi event. Batas aman:
 retensi berhenti menunggu umur dan langsung menghapus yang tertua bila sisa disk < 10%.

@@ -57,7 +57,7 @@ CREATE TABLE cameras (
     source_managed       INTEGER NOT NULL DEFAULT 1,-- 0 = sumber dikelola manual di go2rtc.yaml (xiaomi://)
     record_enabled       INTEGER NOT NULL DEFAULT 1,
     record_stream        TEXT    NOT NULL DEFAULT 'main' CHECK (record_stream IN ('main','sub')),
-    retention_days       INTEGER NOT NULL DEFAULT 5,
+    retention_days       INTEGER NOT NULL DEFAULT 14,
     event_retention_days INTEGER NOT NULL DEFAULT 30,
     snapshot_enabled     INTEGER NOT NULL DEFAULT 1,
     timelapse_enabled    INTEGER NOT NULL DEFAULT 1,
