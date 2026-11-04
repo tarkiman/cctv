@@ -19,6 +19,7 @@ export const router = createRouter({
     { path: '/timelapse', name: 'timelapse', component: () => import('../pages/TimelapsePage.vue'), meta: { title: 'Timelapse' } },
     { path: '/status', name: 'system', component: () => import('../pages/SystemPage.vue'), meta: { title: 'Status' } },
     { path: '/pengaturan', name: 'settings', component: () => import('../pages/SettingsPage.vue'), meta: { title: 'Pengaturan' } },
+    { path: '/offline', name: 'offline', component: () => import('../pages/OfflinePage.vue'), meta: { public: true, bare: true, title: 'Offline' } },
     { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('../pages/NotFoundPage.vue'), meta: { title: 'Tidak ditemukan' } },
   ],
 })
@@ -29,7 +30,10 @@ router.beforeEach(async (to) => {
     try {
       await auth.check()
     } catch {
-      // Server unreachable: let the page render and show its own error state.
+      // Server unreachable (offline, or the box is rebooting): don't pretend the user is
+      // signed out; show the offline page, which retries.
+      if (to.name === 'offline') return
+      return { name: 'offline', query: { next: to.fullPath } }
     }
   }
   if (!to.meta.public && !auth.user) return { name: 'login', query: to.fullPath !== '/' ? { next: to.fullPath } : {} }

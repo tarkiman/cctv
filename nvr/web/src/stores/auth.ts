@@ -7,15 +7,16 @@ export const useAuth = defineStore('auth', () => {
   const user = ref<User | null>(null)
   const checked = ref(false)
 
+  // Only a definite answer (signed in, or 401) counts as checked; when the server is
+  // unreachable the next navigation asks again.
   async function check() {
     try {
       user.value = await api.me()
     } catch (e) {
       if (!(e instanceof ApiError) || e.status !== 401) throw e
       user.value = null
-    } finally {
-      checked.value = true
     }
+    checked.value = true
   }
 
   async function login(username: string, password: string) {
