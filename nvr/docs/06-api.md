@@ -75,6 +75,8 @@ go2rtc".
 | `GET` | `/cameras/{id}/recordings?from=&to=` | Daftar segmen mentah |
 | `GET` | `/cameras/{id}/recordings/at?t=` | Segmen yang memuat waktu `t` + offset detik |
 | `GET` | `/recordings/{id}/file` | File MP4, mendukung `Range` |
+| `GET` | `/cameras/{id}/export/estimate?from=&to=` | Perkiraan klip: `seconds` terekam, `bytes`, `segments`, `gap_seconds` |
+| `GET` | `/cameras/{id}/export?from=&to=` | Unduh klip MP4 (stream copy, maks 3 jam, satu export sekaligus → `429` bila sibuk, `404` bila tanpa rekaman). Nama file `<slug>_<tanggal>_<HHMMSS>-<HHMMSS>.mp4` (WIB) |
 
 Contoh `GET /cameras/2/timeline?date=2026-11-04`:
 ```json

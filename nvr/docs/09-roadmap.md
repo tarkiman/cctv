@@ -43,7 +43,7 @@ Kriteria selesai:
 
 - UI kelola kamera + tes koneksi + sinkron ke go2rtc.
 - Pengaturan rekaman & retensi dengan perkiraan disk.
-- Export klip.
+- ✅ Export klip (2026-11-04): pilih mulai + durasi di halaman Rekaman, rentang ditandai di timeline, perkiraan ukuran; server concat + `-c copy` (tanpa re-encode), file sementara di `/data/exports` dihapus setelah diunduh.
 - ✅ Notifikasi webhook (2026-11-04): kamera offline > 5 menit, disk < 10%, sesi Xiaomi `c301`
   kemungkinan kedaluwarsa (termasuk pengingat proaktif di hari ke-14).
 - Multi-user (admin/viewer), ganti password.

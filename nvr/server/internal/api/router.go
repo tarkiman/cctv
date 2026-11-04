@@ -14,6 +14,7 @@ import (
 	"github.com/tarkiman/cctv/nvr/server/internal/auth"
 	"github.com/tarkiman/cctv/nvr/server/internal/camera"
 	"github.com/tarkiman/cctv/nvr/server/internal/config"
+	"github.com/tarkiman/cctv/nvr/server/internal/export"
 	"github.com/tarkiman/cctv/nvr/server/internal/go2rtc"
 	"github.com/tarkiman/cctv/nvr/server/internal/health"
 	"github.com/tarkiman/cctv/nvr/server/internal/notify"
@@ -32,6 +33,7 @@ type Server struct {
 	Hub     *sse.Hub
 	Sys     *sysinfo.Sampler
 	Notify  *notify.Watcher
+	Export  *export.Exporter
 	Web     fs.FS
 	Version string
 	Log     *slog.Logger
@@ -60,6 +62,7 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/stream", s.stream)
 			r.Get("/live/ws", s.liveWS)
 			r.Get("/recordings/{id}/file", s.recordingFile)
+			r.Get("/cameras/{id}/export", s.exportClip)
 			r.Get("/timelapse/{cameraID}/{date}.mp4", s.timelapseFile)
 
 			r.Group(func(r chi.Router) {
@@ -74,6 +77,7 @@ func (s *Server) Routes() http.Handler {
 				r.Get("/cameras/{id}/timeline", s.timeline)
 				r.Get("/cameras/{id}/recordings", s.listRecordings)
 				r.Get("/cameras/{id}/recordings/at", s.recordingAt)
+				r.Get("/cameras/{id}/export/estimate", s.exportEstimate)
 				r.Get("/recordings/{id}/next", s.recordingNext)
 				r.Get("/timelapse", s.listTimelapse)
 				r.Post("/live/webrtc", s.liveWebRTC)

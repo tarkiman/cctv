@@ -22,6 +22,7 @@ import (
 	"github.com/tarkiman/cctv/nvr/server/internal/camera"
 	"github.com/tarkiman/cctv/nvr/server/internal/config"
 	"github.com/tarkiman/cctv/nvr/server/internal/db"
+	"github.com/tarkiman/cctv/nvr/server/internal/export"
 	"github.com/tarkiman/cctv/nvr/server/internal/ffmpeg"
 	"github.com/tarkiman/cctv/nvr/server/internal/go2rtc"
 	"github.com/tarkiman/cctv/nvr/server/internal/health"
@@ -119,7 +120,7 @@ func run() error {
 		Addr: cfg.Listen,
 		Handler: (&api.Server{
 			Config: cfg, Store: st, Auth: authSvc, Go2rtc: g2r, Health: tracker, Cameras: mgr,
-			Hub: hub, Sys: &sysinfo.Sampler{}, Notify: watcher, Web: web.FS(), Version: version, Log: log,
+			Hub: hub, Sys: &sysinfo.Sampler{}, Notify: watcher, Export: export.New(tools, cfg.DataDir), Web: web.FS(), Version: version, Log: log,
 		}).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,

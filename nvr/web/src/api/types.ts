@@ -113,3 +113,10 @@ export interface WorkerStatus {
 }
 
 export type Settings = Record<'min_free_percent' | 'timelapse_keep_days' | 'timelapse_fps', number>
+
+export interface ExportEstimate {
+  seconds: number
+  bytes: number
+  segments: number
+  gap_seconds: number
+}

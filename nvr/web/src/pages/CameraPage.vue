@@ -25,6 +25,7 @@ import LivePlayer from '../components/LivePlayer.vue'
 import RecordingPlayer from '../components/RecordingPlayer.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import Timeline from '../components/Timeline.vue'
+import ExportPanel from '../components/ExportPanel.vue'
 import StateMessage from '../components/StateMessage.vue'
 
 const route = useRoute()
@@ -51,6 +52,7 @@ const playing = ref(false)
 const segment = ref<Recording | null>(null)
 const rate = ref(1)
 const showKeys = ref(false)
+const exportSel = ref<{ start: Date; end: Date } | null>(null)
 const today = computed(() => wibDate(new Date(now.value)))
 const dayStart = computed(() => wibMidnight(date.value))
 
@@ -306,7 +308,7 @@ onMounted(() => {
             </div>
           </div>
 
-          <Timeline :day-start="dayStart" :ranges="timeline?.ranges ?? []" :playhead="playhead" :now="now" :loading="tlLoading" @seek="seek" />
+          <Timeline :day-start="dayStart" :ranges="timeline?.ranges ?? []" :playhead="playhead" :now="now" :loading="tlLoading" :selection="exportSel" @seek="seek" />
           <p v-if="!tlLoading && timeline && !timeline.ranges.length" class="text-sm text-muted">Tidak ada rekaman pada tanggal ini.</p>
         </div>
       </section>
@@ -340,6 +342,15 @@ onMounted(() => {
           <p v-else class="text-sm text-muted">Belum ada.</p>
           <p v-if="playhead" class="mt-3 text-xs text-muted tabular">Posisi: {{ fmtTimeSec(playhead) }} WIB</p>
         </div>
+
+        <ExportPanel
+          v-if="mode === 'rekaman'"
+          :camera-id="cam.id"
+          :camera-name="cam.name"
+          :playhead="playhead"
+          :now="now"
+          @selection="exportSel = $event"
+        />
 
         <div class="hidden rounded-[var(--radius-card)] border border-line bg-surface p-4 xl:block">
           <button type="button" class="flex w-full items-center gap-2 text-sm font-semibold" :aria-expanded="showKeys" @click="showKeys = !showKeys">

@@ -1,5 +1,6 @@
 import type {
   Camera,
+  ExportEstimate,
   RecordingAt,
   Recording,
   Settings,
@@ -68,6 +69,9 @@ export const api = {
   timeline: (id: number, date: string) => request<Timeline>('GET', `/cameras/${id}/timeline?${q({ date })}`),
   recordingAt: (id: number, t: Date) => request<RecordingAt>('GET', `/cameras/${id}/recordings/at?${q({ t: t.toISOString().replace(/\.\d+Z$/, 'Z') })}`),
   recordingNext: (recordingId: number) => request<Recording>('GET', `/recordings/${recordingId}/next`),
+
+  exportEstimate: (id: number, from: string, to: string) => request<ExportEstimate>('GET', `/cameras/${id}/export/estimate?${q({ from, to })}`),
+  exportUrl: (id: number, from: string, to: string) => `/api/v1/cameras/${id}/export?${q({ from, to })}`,
 
   timelapse: () => request<TimelapseItem[]>('GET', '/timelapse'),
   timelapseUrl: (cameraId: number, date: string) => `/api/v1/timelapse/${cameraId}/${date}.mp4`,
