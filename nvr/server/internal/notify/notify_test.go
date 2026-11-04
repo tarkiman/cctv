@@ -68,7 +68,7 @@ func TestWatcherAlertsOncePerOutage(t *testing.T) {
 	var diskFree uint64 = 50
 	clock := time.Unix(1_800_000_000, 0)
 	w := &Watcher{
-		Notifier: New([]string{srv.URL}, log), Store: st, Health: tr,
+		Notifier: New([]string{srv.URL}, nil, "test", log), Store: st, Health: tr,
 		Disk:         func() (uint64, uint64) { return 100, diskFree },
 		OfflineAfter: 5 * time.Minute, Log: log,
 		now: func() time.Time { return clock },
@@ -111,9 +111,10 @@ func TestWatcherAlertsOncePerOutage(t *testing.T) {
 
 func TestDiscordPayloadAndRedact(t *testing.T) {
 	u := "https://discord.com/api/webhooks/123/secret-token"
-	b, err := payload(u, Message{Title: "x", Level: Alert, At: time.Unix(0, 0)})
-	if err != nil {
-		t.Fatal(err)
+	n := New([]string{u}, nil, "f", nil)
+	b, ct, err := n.discord(Message{Title: "x", Level: Alert, At: time.Unix(0, 0)})
+	if err != nil || ct != "application/json" {
+		t.Fatal(err, ct)
 	}
 	var p struct {
 		Embeds []struct{ Title string } `json:"embeds"`
@@ -139,7 +140,7 @@ func TestGowaRequest(t *testing.T) {
 	}))
 	defer srv.Close()
 	u := strings.Replace(srv.URL, "http://", "http://wa:s3cret@", 1) + "/send/message?phone=6281200000000"
-	n := New([]string{u}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	n := New([]string{u}, nil, "f", slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err := n.Send(context.Background(), Message{Title: "Judul", Text: "Isi", URL: "https://x"}); err != nil {
 		t.Fatal(err)
 	}

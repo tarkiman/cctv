@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/tarkiman/cctv/nvr/server/internal/notify"
 	"github.com/tarkiman/cctv/nvr/server/internal/store"
 )
 
@@ -126,17 +125,13 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 
 // notifyTest sends a test message to every configured webhook.
 func (s *Server) notifyTest(w http.ResponseWriter, r *http.Request) {
-	if !s.Notifier.Enabled() {
+	if !s.Notify.Enabled() {
 		writeError(w, http.StatusConflict, "notify_disabled", "Notifikasi belum diatur. Isi NVR_NOTIFY_WEBHOOK di .env lalu restart nvrd.")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
-	err := s.Notifier.Send(ctx, notify.Message{
-		Kind: "test", Level: notify.Info, Title: "Tes notifikasi NVR Lite",
-		Text: "Kalau pesan ini sampai, notifikasi kamera offline dan disk penuh akan dikirim ke sini.",
-		URL:  s.Config.PublicURL,
-	})
+	err := s.Notify.Test(ctx)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "notify_failed", "Gagal mengirim: "+err.Error())
 		return

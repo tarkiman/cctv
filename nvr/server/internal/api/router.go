@@ -23,18 +23,18 @@ import (
 )
 
 type Server struct {
-	Config   *config.Config
-	Store    *store.Store
-	Auth     *auth.Service
-	Go2rtc   *go2rtc.Client
-	Health   *health.Tracker
-	Cameras  *camera.Manager
-	Hub      *sse.Hub
-	Sys      *sysinfo.Sampler
-	Notifier *notify.Notifier
-	Web      fs.FS
-	Version  string
-	Log      *slog.Logger
+	Config  *config.Config
+	Store   *store.Store
+	Auth    *auth.Service
+	Go2rtc  *go2rtc.Client
+	Health  *health.Tracker
+	Cameras *camera.Manager
+	Hub     *sse.Hub
+	Sys     *sysinfo.Sampler
+	Notify  *notify.Watcher
+	Web     fs.FS
+	Version string
+	Log     *slog.Logger
 }
 
 func (s *Server) Routes() http.Handler {
