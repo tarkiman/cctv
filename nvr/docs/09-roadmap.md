@@ -75,7 +75,7 @@ Pembanding: Frigate di mesin yang sama memakai 123–215% CPU dan 460–580 MB R
 | S1 | 2 recorder `-c copy` + go2rtc, rata-rata 9 menit: `bardi` 3,2% CPU / 21 MB, `c301` 4,0% / 21 MB, go2rtc 8,8% / 13 MB. **Total ~16% CPU, ~55 MB RAM.** RAM tersedia host naik dari 660 MB ke 1,2 GB. Ukuran (malam hari): `bardi` ~2,4 MB/menit (~3,4 GB/hari), `c301` ~0,8 MB/menit (~1,2 GB/hari). | Lolos |
 | S2 | `-segment_list pipe:1 -segment_list_type csv` mengeluarkan satu baris per segmen selesai (`nama,mulai,akhir`). Remux `.ts`→`.mp4` segmen 60 s: ~1,2 s, ~1 s CPU; `moov` di depan `mdat` (siap seek); perlu `-tag:v hvc1` untuk HEVC agar Safari mau memutar. Seek ke detik 40 dengan ffmpeg ~1 s. | Lolos (seek di browser menunggu S4) |
 | S3 | Snapshot `-skip_frame nokey`: 2,3–3,3 s per pengambilan (menunggu keyframe), CPU < 1 s. Untuk 1 snapshot/menit/kamera ≈ 1–2% satu core. | Lolos |
-| S4 | Belum. Butuh uji di HP & laptop pengguna; file uji sudah disiapkan di `/DATA/cctv/nvr-spike/web/`. | Tertunda |
+| S4 | Opera 138 (Chromium 154) di Windows, lewat ZeroTier: H.264 & HEVC `canPlayType=probably`, MSE ya. Ketiga MP4 hasil remux terputar: `bardi` HEVC load 201 ms / seek 435 ms, `c301` HEVC 253 / 136 ms, `bardi_sub` H.264 358 / 56 ms. Belum diuji: browser HP, live view go2rtc. | Lolos di desktop; HP tertunda |
 | S5 | `PUT /api/streams?name=&src=` **ditulis ke `go2rtc.yaml`** (persisten). `PATCH` hanya mengubah memori, tidak ditulis ke file. Gunakan `PUT` (atau `DELETE` + `PUT`) untuk sinkronisasi. | Lolos, dengan catatan |
 | S6 | Decode `bardi_sub` (H.264 640x360) → `fps=2,scale=320,gray`: ~7 s CPU per 60 s (~12% satu core, ~3% total). Hanya keyframe: ~2,6 s per 60 s (~4% satu core). | Lolos |
 

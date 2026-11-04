@@ -94,8 +94,22 @@ Lainnya** (Lainnya membuka Pengaturan, Status, Keluar).
 │ Kamar · c301    ● Offline    │                               │
 └──────────────────────────────┴───────────────────────────────┘
 ```
-- Layout: otomatis (1 kolom di HP, 2 di tablet, 2×2/3×3 di desktop) atau dipilih manual;
-  pilihan disimpan per perangkat (`localStorage`).
+- **Grid yang memaksimalkan lebar layar** (masukan pengguna setelah uji S4: daftar video
+  berjejer ke bawah memboroskan layar lebar):
+  - Mode **Otomatis** (default): CSS Grid
+    `grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr))`, sehingga
+    jumlah kolom mengikuti lebar layar — 1 di HP, 2 di tablet, 3–4 di desktop/monitor
+    lebar — tanpa breakpoint manual. Tile rasio 16:9 tetap, jadi tidak ada layout shift.
+  - Mode manual: **1 / 2×2 / 3×3**, dan **Fokus** (satu kamera besar + strip kamera lain
+    di samping pada layar lebar, atau di bawah pada HP). Pilihan disimpan per perangkat
+    (`localStorage`).
+  - Mode **Dinding** (tombol layar penuh): grid memenuhi seluruh layar tanpa header dan
+    navigasi, label kamera tampil sebagai overlay tipis yang memudar setelah 3 detik tanpa
+    gerakan mouse — untuk monitor/TV yang memantau terus.
+  - Jumlah kolom maksimal dibatasi agar tile tidak terlalu kecil untuk dikenali; bila
+    kamera lebih banyak dari slot, grid menggulir vertikal (bukan mengecilkan tile).
+  - Halaman lain yang menampilkan banyak media (Event, Timelapse, Export) memakai pola
+    grid kartu yang sama.
 - Ketuk tile → `/camera/:slug`. Tekan lama/menu → "Putar rekaman 5 menit lalu".
 - Urutan tile bisa diatur (drag) di Pengaturan → Kamera.
 - Header ringkas: jumlah kamera online, peringatan disk, status SSE (bila putus: banner
@@ -116,6 +130,10 @@ Lainnya** (Lainnya membuka Pengaturan, Status, Keluar).
 │        ▲ person          ▲ person      │ sekarang            │
 └──────────────────────────────────────────────────────────────┘
 ```
+- **Tata letak layar lebar (≥ 1200 px):** video di kiri (sebesar mungkin, rasio 16:9),
+  panel kanan selebar ~320 px berisi pemilih tanggal, daftar event hari itu, dan info
+  kamera; timeline tetap selebar penuh di bawah video. Di HP semuanya bertumpuk vertikal
+  dengan video di atas.
 - **Mode Live:** layar penuh, pinch/scroll untuk zoom digital, tombol snapshot (unduh JPG),
   pilihan kualitas (HD = stream utama, SD = sub-stream).
 - **Mode Rekaman:**
