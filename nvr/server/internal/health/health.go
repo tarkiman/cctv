@@ -157,3 +157,11 @@ func Explain(lines []string, xiaomi bool) string {
 	}
 	return ""
 }
+
+// Remove forgets a deleted camera.
+func (t *Tracker) Remove(id int64) {
+	t.mu.Lock()
+	delete(t.cams, id)
+	t.mu.Unlock()
+	t.hub.Publish("camera.removed", map[string]int64{"camera_id": id})
+}

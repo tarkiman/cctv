@@ -94,7 +94,7 @@ func run() error {
 		Every: cfg.SnapshotEvery, Log: log.With("component", "snapshot"),
 	}
 	mgr := &camera.Manager{
-		Store: st, Go2rtc: g2r, Health: tracker, Recorder: rec, Snapshotter: snap,
+		Store: st, Go2rtc: g2r, Health: tracker, Recorder: rec, Snapshotter: snap, DataDir: cfg.DataDir,
 		Log: log.With("component", "cameras"),
 	}
 	mgr.Start(ctx)
@@ -120,7 +120,7 @@ func run() error {
 		Addr: cfg.Listen,
 		Handler: (&api.Server{
 			Config: cfg, Store: st, Auth: authSvc, Go2rtc: g2r, Health: tracker, Cameras: mgr,
-			Hub: hub, Sys: &sysinfo.Sampler{}, Notify: watcher, Export: export.New(tools, cfg.DataDir), Web: web.FS(), Version: version, Log: log,
+			Hub: hub, Sys: &sysinfo.Sampler{}, Notify: watcher, Export: export.New(tools, cfg.DataDir), Tools: tools, Web: web.FS(), Version: version, Log: log,
 		}).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,

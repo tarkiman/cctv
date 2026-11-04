@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -160,4 +161,75 @@ func lastLines(s string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, " | ")
+}
+
+// StreamInfo is what a connection test reports about a source.
+type StreamInfo struct {
+	Codec  string  `json:"codec"`
+	Width  int     `json:"width"`
+	Height int     `json:"height"`
+	FPS    float64 `json:"fps"`
+	Audio  string  `json:"audio,omitempty"`
+}
+
+// ProbeURL connects to a live source and reads its stream parameters.
+func (t Tools) ProbeURL(ctx context.Context, src string) (*StreamInfo, error) {
+	args := []string{"-v", "error", "-show_entries", "stream=codec_type,codec_name,width,height,avg_frame_rate,r_frame_rate", "-of", "json"}
+	if strings.HasPrefix(src, "rtsp") {
+		args = append(args, "-rtsp_transport", "tcp")
+	}
+	args = append(args, "-timeout", "8000000", src) // µs; rtsp/http socket timeout
+	cmd := exec.CommandContext(ctx, t.FFprobe, args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(lastLines(stderr.String(), 2))
+		if msg == "" {
+			msg = err.Error()
+		}
+		return nil, errors.New(strings.ReplaceAll(msg, src, "<sumber>"))
+	}
+	var res struct {
+		Streams []struct {
+			CodecType string `json:"codec_type"`
+			CodecName string `json:"codec_name"`
+			Width     int    `json:"width"`
+			Height    int    `json:"height"`
+			Avg       string `json:"avg_frame_rate"`
+			R         string `json:"r_frame_rate"`
+		} `json:"streams"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &res); err != nil {
+		return nil, err
+	}
+	info := &StreamInfo{}
+	for _, s := range res.Streams {
+		switch {
+		case s.CodecType == "video" && info.Codec == "":
+			info.Codec, info.Width, info.Height = s.CodecName, s.Width, s.Height
+			info.FPS = rate(s.Avg)
+			if info.FPS == 0 || info.FPS > 120 {
+				info.FPS = rate(s.R)
+			}
+		case s.CodecType == "audio" && info.Audio == "":
+			info.Audio = s.CodecName
+		}
+	}
+	if info.Codec == "" {
+		return nil, errors.New("sumber tersambung tetapi tidak ada stream video")
+	}
+	return info, nil
+}
+
+func rate(r string) float64 {
+	n, d, ok := strings.Cut(r, "/")
+	if !ok {
+		return 0
+	}
+	a, _ := strconv.ParseFloat(n, 64)
+	b, _ := strconv.ParseFloat(d, 64)
+	if b == 0 {
+		return 0
+	}
+	return math.Round(a/b*100) / 100
 }

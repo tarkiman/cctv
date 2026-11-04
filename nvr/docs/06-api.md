@@ -43,10 +43,13 @@ kecuali `POST /auth/login` dan `GET /healthz` butuh sesi.
 |---|---|---|
 | `GET` | `/cameras` | Daftar kamera + status singkat |
 | `GET` | `/cameras/{id}` | Detail (tanpa URL sumber/rahasia) |
-| `POST` | `/cameras` | Fase 2. Tambah kamera |
+| `POST` | `/cameras` | `{slug, name, main, sub?}` (sumber = `{url, username, password}`); stream ditulis ke go2rtc (`PUT`, persisten), lalu ditemukan & mulai direkam (admin) |
+| `GET` | `/cameras/{id}/sources` | Sumber tanpa password: `{editable, reason, xiaomi, main:{url, username, has_password}, sub}` (admin) |
+| `PUT` | `/cameras/{id}/sources` | `{main, sub?}`; password kosong = pakai password lama (username sama); `sub: null` menghapus sub-stream. Xiaomi/sumber khusus → `409` (admin) |
+| `DELETE` | `/cameras/{id}` | `{confirm: <slug>}`; hapus stream go2rtc, kamera, rekaman, snapshot, timelapse. Xiaomi → `409` (admin) |
 | `PATCH` | `/cameras/{id}` | Ubah sebagian field (nama, rekaman, retensi, deteksi, urutan) |
 | `DELETE` | `/cameras/{id}` | Fase 2. Hapus kamera; `?delete_recordings=true` untuk ikut hapus file |
-| `POST` | `/cameras/probe` | Fase 2. `{url}` → `{codec, width, height, fps, audio}` via go2rtc/ffprobe |
+| `POST` | `/cameras/probe` | `{source, stream, camera_id?}` → `{ok, info:{codec,width,height,fps,audio}, advice[]}` atau `{ok:false, error}` (pesan Indonesia: login salah, path 404, port ditolak, kamera tidak menjawab). ffprobe langsung ke kamera, timeout 20 dtk (admin) |
 | `GET` | `/cameras/{id}/snapshot.jpg` | Snapshot terbaru (`Cache-Control: no-cache`, `ETag`) |
 
 Contoh `GET /cameras`:

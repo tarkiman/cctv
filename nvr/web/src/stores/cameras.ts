@@ -42,6 +42,10 @@ export const useCameras = defineStore('cameras', () => {
     if (i >= 0) list.value[i] = cam
   }
 
+  function remove(id: number) {
+    list.value = list.value.filter((c) => c.id !== id)
+  }
+
   function connect() {
     if (source) return
     source = new EventSource('/api/v1/stream')
@@ -52,6 +56,7 @@ export const useCameras = defineStore('cameras', () => {
       const { camera_id, at } = JSON.parse((e as MessageEvent).data)
       snapshotAt.value[camera_id] = at
     })
+    source.addEventListener('camera.removed', (e) => remove(JSON.parse((e as MessageEvent).data).camera_id))
     source.addEventListener('system.alert', (e) => (alert.value = JSON.parse((e as MessageEvent).data).message))
   }
 
@@ -60,5 +65,5 @@ export const useCameras = defineStore('cameras', () => {
     source = null
   }
 
-  return { list, loading, loaded, error, snapshotAt, connected, alert, byId, bySlug, online, load, replace, connect, disconnect }
+  return { list, loading, loaded, error, snapshotAt, connected, alert, byId, bySlug, online, load, replace, remove, connect, disconnect }
 })

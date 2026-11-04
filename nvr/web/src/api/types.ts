@@ -138,3 +138,30 @@ export interface Device {
   created_at: string
   last_seen: string
 }
+
+export interface SourceInput {
+  url: string
+  username: string
+  password: string
+}
+
+export interface SourceInfo {
+  url: string
+  username: string
+  has_password: boolean
+}
+
+export interface CameraSources {
+  editable: boolean
+  reason?: string
+  xiaomi: boolean
+  main: SourceInfo | null
+  sub: SourceInfo | null
+}
+
+export interface ProbeResult {
+  ok: boolean
+  error?: string
+  info?: { codec: string; width: number; height: number; fps: number; audio?: string }
+  advice?: string[]
+}

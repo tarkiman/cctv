@@ -1,10 +1,13 @@
 import type {
   Camera,
+  CameraSources,
   Device,
   ExportEstimate,
   RecordingAt,
+  ProbeResult,
   Recording,
   Settings,
+  SourceInput,
   SystemStats,
   Timeline,
   TimelapseItem,
@@ -74,6 +77,14 @@ export const api = {
   cameras: () => request<Camera[]>('GET', '/cameras'),
   camera: (id: number) => request<Camera>('GET', `/cameras/${id}`),
   updateCamera: (id: number, patch: Partial<Camera>) => request<Camera>('PATCH', `/cameras/${id}`, patch),
+  cameraSources: (id: number) => request<CameraSources>('GET', `/cameras/${id}/sources`),
+  setCameraSources: (id: number, main: SourceInput, sub: SourceInput | null) =>
+    request<CameraSources>('PUT', `/cameras/${id}/sources`, { main, sub }),
+  createCamera: (slug: string, name: string, main: SourceInput, sub: SourceInput | null) =>
+    request<Camera>('POST', '/cameras', { slug, name, main, sub }),
+  deleteCamera: (id: number, confirm: string) => request<void>('DELETE', `/cameras/${id}`, { confirm }),
+  probeCamera: (source: SourceInput, stream: 'main' | 'sub', cameraId?: number) =>
+    request<ProbeResult>('POST', '/cameras/probe', { source, stream, camera_id: cameraId ?? 0 }),
   syncCameras: () => request<Camera[]>('POST', '/cameras/sync'),
   snapshotUrl: (id: number, bust?: string | number) => `/api/v1/cameras/${id}/snapshot.jpg${bust ? `?t=${bust}` : ''}`,
 

@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 type Client struct {
@@ -71,6 +73,71 @@ func (c *Client) PutStream(ctx context.Context, name, src string) error {
 		return err
 	}
 	return c.do(req, nil)
+}
+
+// DeleteStream removes a stream; like PUT, go2rtc writes the change to go2rtc.yaml.
+func (c *Client) DeleteStream(ctx context.Context, name string) error {
+	q := url.Values{"src": {name}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.base+"/api/streams?"+q.Encode(), nil)
+	if err != nil {
+		return err
+	}
+	return c.do(req, nil)
+}
+
+// Sources returns each stream's configured source URLs from go2rtc.yaml. Unlike
+// Streams, this works whether or not the stream is running (a running producer
+// reports its format, not its URL).
+func (c *Client) Sources(ctx context.Context) (map[string][]string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/api/config", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return nil, fmt.Errorf("go2rtc GET /api/config: %s", resp.Status)
+	}
+	var cfg struct {
+		Streams map[string]any `yaml:"streams"`
+	}
+	if err := yaml.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&cfg); err != nil && err != io.EOF {
+		return nil, fmt.Errorf("parse go2rtc config: %w", err)
+	}
+	return ParseSources(cfg.Streams), nil
+}
+
+// ParseSources normalises the streams section: each value may be a string or a list.
+func ParseSources(streams map[string]any) map[string][]string {
+	out := map[string][]string{}
+	for name, v := range streams {
+		switch t := v.(type) {
+		case string:
+			out[name] = []string{t}
+		case []any:
+			for _, x := range t {
+				if s, ok := x.(string); ok {
+					out[name] = append(out[name], s)
+				}
+			}
+		default:
+			out[name] = nil
+		}
+	}
+	return out
+}
+
+// IsXiaomiSource reports whether any of the sources uses Xiaomi P2P.
+func IsXiaomiSource(srcs []string) bool {
+	for _, s := range srcs {
+		if strings.HasPrefix(s, "xiaomi://") {
+			return true
+		}
+	}
+	return false
 }
 
 // WebRTC exchanges an SDP offer for an answer for the given stream.

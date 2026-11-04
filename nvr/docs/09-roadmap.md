@@ -41,7 +41,7 @@ Kriteria selesai:
 
 ## Fase 2 — Kelola & pantau
 
-- UI kelola kamera + tes koneksi + sinkron ke go2rtc.
+- ✅ UI kelola kamera (2026-11-04): tambah kamera RTSP, ubah sumber (mis. IP berubah; password lama dipertahankan), tes koneksi (codec/resolusi/fps + saran), hapus kamera beserta datanya; kamera Xiaomi hanya-baca. Deteksi Xiaomi kini dari `/api/config` go2rtc, bukan dari producer yang sedang jalan.
 - Pengaturan rekaman & retensi dengan perkiraan disk.
 - ✅ Export klip (2026-11-04): pilih mulai + durasi di halaman Rekaman, rentang ditandai di timeline, perkiraan ukuran; server concat + `-c copy` (tanpa re-encode), file sementara di `/data/exports` dihapus setelah diunduh.
 - ✅ Notifikasi webhook (2026-11-04): kamera offline > 5 menit, disk < 10%, sesi Xiaomi `c301`

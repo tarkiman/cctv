@@ -32,6 +32,7 @@ type Manager struct {
 	Health      *health.Tracker
 	Recorder    *recorder.Recorder
 	Snapshotter *snapshot.Snapshotter
+	DataDir     string
 	Log         *slog.Logger
 
 	mu      sync.Mutex
@@ -103,6 +104,13 @@ func (m *Manager) Sync(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	sources, _ := m.Go2rtc.Sources(ctx) // nil on error: fall back to producers
+	xiaomi := func(name string) bool {
+		if srcs, ok := sources[name]; ok {
+			return go2rtc.IsXiaomiSource(srcs)
+		}
+		return streams[name].IsXiaomi()
+	}
 	byMain := map[string]store.Camera{}
 	for _, c := range cams {
 		byMain[c.MainStream] = c
@@ -128,7 +136,7 @@ func (m *Manager) Sync(ctx context.Context) error {
 					return err
 				}
 			}
-			m.Health.SetXiaomi(c.ID, streams[name].IsXiaomi())
+			m.Health.SetXiaomi(c.ID, xiaomi(name))
 			continue
 		}
 		slug := strings.ToLower(name)
@@ -141,7 +149,7 @@ func (m *Manager) Sync(ctx context.Context) error {
 			return err
 		}
 		order++
-		m.Health.SetXiaomi(id, streams[name].IsXiaomi())
+		m.Health.SetXiaomi(id, xiaomi(name))
 		m.Log.Info("camera discovered", "slug", slug, "sub_stream", sub.String)
 	}
 	return nil

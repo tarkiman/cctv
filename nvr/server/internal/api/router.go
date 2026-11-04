@@ -15,6 +15,7 @@ import (
 	"github.com/tarkiman/cctv/nvr/server/internal/camera"
 	"github.com/tarkiman/cctv/nvr/server/internal/config"
 	"github.com/tarkiman/cctv/nvr/server/internal/export"
+	"github.com/tarkiman/cctv/nvr/server/internal/ffmpeg"
 	"github.com/tarkiman/cctv/nvr/server/internal/go2rtc"
 	"github.com/tarkiman/cctv/nvr/server/internal/health"
 	"github.com/tarkiman/cctv/nvr/server/internal/notify"
@@ -34,6 +35,7 @@ type Server struct {
 	Sys     *sysinfo.Sampler
 	Notify  *notify.Watcher
 	Export  *export.Exporter
+	Tools   ffmpeg.Tools
 	Web     fs.FS
 	Version string
 	Log     *slog.Logger
@@ -91,6 +93,11 @@ func (s *Server) Routes() http.Handler {
 					r.Use(requireAdmin)
 					r.Patch("/cameras/{id}", s.patchCamera)
 					r.Post("/cameras/sync", s.syncCameras)
+					r.Post("/cameras", s.createCamera)
+					r.Post("/cameras/probe", s.probeCamera)
+					r.Get("/cameras/{id}/sources", s.cameraSources)
+					r.Put("/cameras/{id}/sources", s.putCameraSources)
+					r.Delete("/cameras/{id}", s.deleteCamera)
 					r.Get("/system/status", s.systemStatus)
 					r.Get("/settings", s.getSettings)
 					r.Put("/settings", s.putSettings)

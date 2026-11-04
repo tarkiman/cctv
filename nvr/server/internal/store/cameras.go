@@ -99,3 +99,9 @@ func (s *CameraStore) Update(ctx context.Context, c *Camera) error {
 		c.SnapshotEnabled, c.TimelapseEnabled, c.SortOrder, now(), c.ID)
 	return err
 }
+
+// Delete removes a camera with its source rows and recording index (ON DELETE CASCADE).
+func (s *CameraStore) Delete(ctx context.Context, id int64) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM cameras WHERE id = ?`, id)
+	return err
+}
