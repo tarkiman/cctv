@@ -24,8 +24,9 @@ func (s *Server) liveWS(w http.ResponseWriter, r *http.Request) {
 	}
 	stream := cam.StreamFor(r.URL.Query().Get("quality"))
 
-	// Accept verifies that Origin matches Host, which blocks cross-site websocket hijacking.
-	client, err := websocket.Accept(w, r, nil)
+	// Accept verifies that Origin matches Host (or an allowed proxy origin), which blocks
+	// cross-site websocket hijacking.
+	client, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: s.Config.AllowedOrigins})
 	if err != nil {
 		return
 	}

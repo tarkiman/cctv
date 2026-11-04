@@ -48,7 +48,7 @@ func (r *LogRing) Add(line string) {
 func (r *LogRing) Lines() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return append([]string(nil), r.lines...)
+	return append([]string{}, r.lines...)
 }
 
 // Last returns the most recent line, or "".

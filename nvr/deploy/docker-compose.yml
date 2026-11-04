@@ -1,0 +1,23 @@
+# NVR Lite on umma. Both services use host networking: go2rtc needs it for Xiaomi P2P
+# (UDP hole punching), and nvrd then reaches go2rtc on 127.0.0.1 without exposing
+# go2rtc's API to the network.
+services:
+  go2rtc:
+    image: alexxit/go2rtc:1.9.14
+    container_name: nvr-go2rtc
+    restart: unless-stopped
+    network_mode: host
+    # Public DNS over UDP is dropped on this network; Xiaomi cloud login needs DNS.
+    dns: [192.168.1.1]
+    volumes:
+      - ${NVR_DATA:-/DATA/nvr}/go2rtc:/config
+
+  nvrd:
+    image: ghcr.io/tarkiman/cctv-nvr:${NVR_TAG:-nvr-lite}
+    container_name: nvr-nvrd
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env
+    volumes:
+      - ${NVR_DATA:-/DATA/nvr}:/data
+    depends_on: [go2rtc]

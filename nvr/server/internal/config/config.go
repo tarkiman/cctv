@@ -25,6 +25,9 @@ type Config struct {
 	LogLevel       slog.Level
 	SegmentSeconds int
 	SnapshotEvery  time.Duration
+	// Extra browser origins (host patterns) allowed to open the live websocket, for
+	// access through a reverse proxy that rewrites Host, e.g. "cctv.tarkiman.com".
+	AllowedOrigins []string
 }
 
 func Load() (*Config, error) {
@@ -59,6 +62,11 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("NVR_SNAPSHOT_SECONDS must be an integer >= 10")
 	}
 	c.SnapshotEvery = time.Duration(sec) * time.Second
+	for _, o := range strings.Split(os.Getenv("NVR_ALLOWED_ORIGINS"), ",") {
+		if o = strings.TrimSpace(o); o != "" {
+			c.AllowedOrigins = append(c.AllowedOrigins, o)
+		}
+	}
 	return c, nil
 }
 

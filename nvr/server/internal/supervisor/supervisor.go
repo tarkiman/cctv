@@ -49,7 +49,7 @@ func Run(ctx context.Context, log *slog.Logger, fn func(ctx context.Context) err
 			backoff, failures = minBackoff, 0
 		}
 		failures++
-		log.Warn("worker stopped", "err", err, "failures", failures, "retry_in", backoff)
+		log.Warn("worker stopped", "err", err, "failures", failures, "retry_in", backoff.String())
 		if h.OnFailure != nil {
 			h.OnFailure(err, failures, backoff)
 		}

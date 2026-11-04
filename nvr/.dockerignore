@@ -1,0 +1,6 @@
+web/node_modules
+web/dist
+server/web/dist
+docs
+deploy
+**/*.md

@@ -145,7 +145,7 @@ func (s *Service) Login(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	if err := s.Store.Sessions.Create(ctx, hashToken(token), u.ID, expires.Unix(), r.UserAgent(), ip); err != nil {
 		return nil, err
 	}
-	s.setCookie(w, token, expires)
+	s.setCookie(w, r, token, expires)
 	return u, nil
 }
 
@@ -153,17 +153,20 @@ func (s *Service) Logout(ctx context.Context, w http.ResponseWriter, r *http.Req
 	if c, err := r.Cookie(CookieName); err == nil {
 		_ = s.Store.Sessions.Delete(ctx, hashToken(c.Value))
 	}
-	s.setCookie(w, "", time.Unix(0, 0))
+	s.setCookie(w, r, "", time.Unix(0, 0))
 }
 
-func (s *Service) setCookie(w http.ResponseWriter, token string, expires time.Time) {
+// setCookie marks the cookie Secure when the request came over HTTPS (directly or via
+// the Cloudflare tunnel), so login keeps working over plain HTTP on the LAN.
+func (s *Service) setCookie(w http.ResponseWriter, r *http.Request, token string, expires time.Time) {
+	secure := s.SecureCookie || r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
 	http.SetCookie(w, &http.Cookie{
 		Name:     CookieName,
 		Value:    token,
 		Path:     "/",
 		Expires:  expires,
 		HttpOnly: true,
-		Secure:   s.SecureCookie,
+		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 	})
 }
@@ -233,12 +236,18 @@ func CSRF(onFail func(w http.ResponseWriter, r *http.Request)) func(http.Handler
 	}
 }
 
-// ClientIP is the remote address without port. RealIP middleware (if trusted) has
-// already rewritten RemoteAddr.
+// ClientIP is the client's address for rate limiting. Requests relayed by a local
+// cloudflared (loopback peer) carry the real client in CF-Connecting-IP; the header is
+// ignored from any other peer, where it could be forged.
 func ClientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		host = r.RemoteAddr
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		if cf := r.Header.Get("CF-Connecting-IP"); net.ParseIP(cf) != nil {
+			return cf
+		}
 	}
 	return host
 }

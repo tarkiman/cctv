@@ -1,0 +1,20 @@
+# Copy to ${NVR_DATA}/go2rtc/go2rtc.yaml. Each stream becomes a camera in NVR Lite;
+# a stream named <name>_sub is used as that camera's light sub-stream.
+# Percent-encode special characters in passwords (e.g. @ -> %40).
+api:
+  listen: "127.0.0.1:1984"   # dashboard via SSH tunnel: ssh -L 1984:127.0.0.1:1984 umma
+rtsp:
+  listen: "127.0.0.1:8556"
+webrtc:
+  listen: ":8557"
+  candidates:
+    - 192.168.1.20:8557
+    - 172.22.244.135:8557
+
+streams:
+  cam1: rtsp://192.168.1.14:8554/unicast
+  bardi: rtsp://admin:PASSWORD@192.168.1.27:554/V_ENC_000
+  bardi_sub: rtsp://admin:PASSWORD@192.168.1.27:554/V_ENC_001
+  # Created via the go2rtc dashboard (/add.html, Xiaomi, region sg); keep the
+  # generated `xiaomi:` section below it.
+  c301: xiaomi://ACCOUNT_ID:sg@192.168.1.4?did=DEVICE_ID&model=mxiang.camera.c301
