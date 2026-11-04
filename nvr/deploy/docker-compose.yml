@@ -21,3 +21,8 @@ services:
     volumes:
       - ${NVR_DATA:-/DATA/nvr}:/data
     depends_on: [go2rtc]
+    healthcheck:
+      test: ["CMD-SHELL", "port=$${NVR_LISTEN:-:8090}; wget -qO- http://127.0.0.1:$${port##*:}/api/v1/healthz >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s

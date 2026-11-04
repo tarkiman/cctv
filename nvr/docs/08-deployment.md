@@ -1,5 +1,13 @@
 # 08 — Deployment
 
+> **Status deploy (2026-11-04):** NVR Lite berjalan di `umma` sejak 19:29 WIB, di port
+> **:8091**, dan diakses lewat **https://cctv.tarkiman.com** (Cloudflare Tunnel →
+> `localhost:8091`, menggantikan panel lama). Stack Frigate di `~/cctv` sudah di-stop
+> (container tetap ada untuk rollback). Rincian yang berbeda dari rencana di bawah:
+> data di `/DATA/cctv/nvr` (bukan `/DATA/nvr`, karena butuh `sudo`), checkout di
+> `~/cctv-nvr` (clone HTTPS, repo publik), dan image dikirim langsung dari Pi
+> (`docker save | ssh umma docker load`) karena workflow CI `nvr.yml` belum dibuat.
+
 Target: STB `umma` (`tarkiman@192.168.1.20`, ZeroTier `172.22.244.135`), Armbian
 bookworm, arm64. Deploy **selalu diambil dari branch `nvr-lite`** sampai branch ini
 digabung ke `main`.
@@ -162,9 +170,23 @@ cd ~/cctv-nvr/nvr/deploy && docker compose stop
 cd ~/cctv && docker compose start
 ```
 
-Port tidak bentrok (NVR Lite 8090; Frigate 5000/8554/8555, panel 8091), tetapi
-**go2rtc lama dan baru sama-sama memakai port 8556/8557 di host network** dan sama-sama
-membuka sesi P2P ke `c301`, jadi keduanya tidak boleh hidup bersamaan.
+NVR Lite memakai **:8091**, port yang sama dengan panel lama (keduanya dilayani lewat
+Cloudflare Tunnel), dan **go2rtc lama dan baru sama-sama memakai port 8556/8557 di host
+network** serta membuka sesi P2P ke `c301`. Jadi stack lama dan baru tidak boleh hidup
+bersamaan.
+
+## Akses lewat Cloudflare Tunnel
+
+- `cloudflared` di `umma` meneruskan `cctv.tarkiman.com` ke `localhost:8091`.
+- Cookie sesi otomatis diberi `Secure` bila request datang lewat HTTPS
+  (`X-Forwarded-Proto: https`), jadi login tetap bisa lewat HTTP di LAN
+  (`http://192.168.1.20:8091`).
+- Rate limit login memakai IP asli dari `CF-Connecting-IP`, tapi hanya bila peer-nya
+  loopback (cloudflared lokal); dari peer lain header itu diabaikan.
+- Live view (WebSocket) melewati tunnel; `NVR_ALLOWED_ORIGINS=cctv.tarkiman.com`
+  mengizinkan origin itu bila proxy mengubah header `Host`.
+- WebRTC dari luar LAN belum dikonfigurasi (port UDP 8557 tidak melewati tunnel); live
+  view memakai MSE lewat WebSocket.
 
 ## Backup
 

@@ -26,6 +26,7 @@ COPY --from=server /out/nvrd /usr/local/bin/nvrd
 USER nvr
 ENV TZ=Asia/Jakarta NVR_DATA_DIR=/data
 EXPOSE 8090
+# Probe whatever port NVR_LISTEN uses (default :8090).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s \
-    CMD wget -qO- http://127.0.0.1:8090/api/v1/healthz >/dev/null || exit 1
+    CMD port="${NVR_LISTEN:-:8090}"; wget -qO- "http://127.0.0.1:${port##*:}/api/v1/healthz" >/dev/null || exit 1
 ENTRYPOINT ["nvrd"]
