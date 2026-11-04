@@ -1,0 +1,4 @@
+# Dependencies and build output (the Docker image and CI build the web app themselves).
+web/node_modules/
+server/web/dist/*
+!server/web/dist/.gitkeep
