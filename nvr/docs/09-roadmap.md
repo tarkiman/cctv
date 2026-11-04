@@ -1,5 +1,8 @@
 # 09 — Roadmap
 
+> Fase 1 dan 2 selesai pada 2026-11-04. Urutan kerja berikutnya (stabilisasi, Fase 3,
+> backlog) ada di [11 — Rencana pengembangan](11-rencana-pengembangan.md).
+
 Setiap fase selesai bila semua kriteria terpenuhi dan diverifikasi di `umma` (kecuali
 Fase 0 yang boleh di Pi).
 

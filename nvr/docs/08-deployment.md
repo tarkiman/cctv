@@ -1,220 +1,153 @@
 # 08 — Deployment
 
-> **Status deploy (2026-11-04):** NVR Lite berjalan di `umma` sejak 19:29 WIB, di port
-> **:8091**, dan diakses lewat **https://cctv.tarkiman.com** (Cloudflare Tunnel →
-> `localhost:8091`, menggantikan panel lama). Stack Frigate di `~/cctv` sudah di-stop
-> (container tetap ada untuk rollback). Rincian yang berbeda dari rencana di bawah:
-> data di `/DATA/cctv/nvr` (bukan `/DATA/nvr`, karena butuh `sudo`), checkout di
-> `~/cctv-nvr` (clone HTTPS, repo publik), dan image dikirim langsung dari Pi
-> (`docker save | ssh umma docker load`) sampai workflow CI `nvr.yml` dibuat
-> (2026-11-04); sejak itu image diambil dari GHCR.
+NVR Lite berjalan di STB `umma` sejak 2026-11-04, di port **:8091**, dan diakses lewat
+**https://cctv.tarkiman.com** (Cloudflare Tunnel → `localhost:8091`). Stack Frigate lama
+sudah dihapus seluruhnya (lihat [D11](10-keputusan.md#d11-nvr-lite-digabung-ke-main-frigate-dihapus)).
 
-Target: STB `umma` (`tarkiman@192.168.1.20`, ZeroTier `172.22.244.135`), Armbian
-bookworm, arm64. Deploy **selalu diambil dari branch `nvr-lite`** sampai branch ini
-digabung ke `main`.
+## Host `umma`
 
-## Batasan host `umma`
+| | |
+|---|---|
+| Perangkat | ZTE B860H, Armbian bookworm, arm64, 4× Cortex-A53, RAM 1,8 GB (+ zram) |
+| Alamat | `tarkiman@192.168.1.20` (LAN), `172.22.244.135` (ZeroTier) |
+| User | `tarkiman` = uid **1001** (bukan 1000); `sudo` butuh password |
+| Disk | root eMMC 6,5 GB; **semua data di `/DATA`** (HDD 447 GB), Docker `data-root` di `/DATA/docker` |
+| Zona waktu host | CST (UTC+8). Container memakai `TZ=Asia/Jakarta`; aplikasi menyimpan UTC |
+| Layanan lain | `aiplatform-*` (saat ini berhenti); jangan dihapus |
 
-- RAM 1,8 GB, swap zram ~900 MB. Saat Frigate berjalan swap habis — alasan utama proyek
-  ini. Ukur RAM setelah deploy.
-- Root eMMC hanya 6,5 GB. **Semua data di `/DATA`** (HDD 447 GB). Docker `data-root`
-  sudah di `/DATA/docker`.
-- Zona waktu host CST (UTC+8). Container memakai `TZ=Asia/Jakarta`; aplikasi tidak
-  bergantung pada zona waktu host.
-- Ada layanan lain di host ini (`aiplatform`). Jangan menjalankan Frigate dan NVR Lite
-  bersamaan.
-- Building Go + Node di STB lambat; image dibangun di CI (GitHub Actions → GHCR).
+| Path | Isi |
+|---|---|
+| `~/cctv-nvr` | clone HTTPS repo ini, branch `main` |
+| `~/cctv-nvr/nvr/deploy/.env` | konfigurasi (izin `600`; berisi password admin & webhook) |
+| `/DATA/cctv/nvr/` | data: `nvr.db`, `recordings/`, `snapshots/`, `timelapse/`, `backup/`, `exports/` (sementara) |
+| `/DATA/cctv/nvr/go2rtc/go2rtc.yaml` | sumber stream + sesi Xiaomi `c301` — **rahasia, jangan dicetak/di-commit** |
 
-## Image
+## Image & CI
 
-`nvr/Dockerfile` (multi-stage):
-
-```dockerfile
-FROM node:22-alpine AS web
-WORKDIR /web
-COPY web/package*.json ./
-RUN npm ci
-COPY web/ ./
-RUN npm run build                      # -> /web/dist
-
-FROM golang:1.25-alpine AS server
-WORKDIR /src
-COPY server/go.* ./
-RUN go mod download
-COPY server/ ./
-COPY --from=web /web/dist ./web/dist
-ARG VERSION=dev
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/nvrd ./cmd/nvrd
-
-FROM alpine:3.22
-RUN apk add --no-cache ffmpeg tzdata ca-certificates && adduser -D -u 1001 nvr   # samakan dengan uid pemilik /DATA/nvr di host
-COPY --from=server /out/nvrd /usr/local/bin/nvrd
-USER nvr
-ENV TZ=Asia/Jakarta NVR_DATA_DIR=/data
-EXPOSE 8090
-HEALTHCHECK --interval=30s --timeout=5s CMD wget -qO- http://127.0.0.1:8090/api/v1/healthz || exit 1
-ENTRYPOINT ["nvrd"]
-```
-
-Versi base image dikunci saat implementasi; di atas hanya ilustrasi. Fase 3 (ONNX/CGO)
-akan memakai varian image terpisah (`-detect`).
-
-## CI
+`nvr/Dockerfile` (multi-stage): `node:22-alpine` membangun web → `golang:1.26-alpine`
+membangun `nvrd` (web di-embed) → runtime `alpine:3.22` + `ffmpeg`, user uid 1001.
+Healthcheck mengikuti port `NVR_LISTEN`.
 
 Workflow `.github/workflows/nvr.yml`:
-- Trigger: `push` ke `nvr-lite` dengan perubahan di `nvr/**`, pull request, dan
-  `workflow_dispatch`.
+- Trigger: `push` ke `main` yang mengubah `nvr/**`, pull request, `workflow_dispatch`.
 - Job `test`: `npm run build` (termasuk `vue-tsc`), `gofmt`, `go vet`, `go test -race`.
-- Job `image`: build **arm64 saja** di runner native `ubuntu-24.04-arm` (umma dan Pi
-  sama-sama arm64; build lewat QEMU lambat), push
-  `ghcr.io/tarkiman/cctv-nvr:nvr-lite` dan `:<sha7>`. Versi di halaman Status = sha7.
-- Notifikasi Discord memakai pola yang sama dengan `deploy.yml` (secret
-  `DISCORD_WEBHOOK`).
+- Job `image`: build **arm64** di runner native `ubuntu-24.04-arm`, push
+  `ghcr.io/tarkiman/cctv-nvr:latest` dan `:<sha7>` (paket publik, `umma` menarik tanpa
+  login). Versi di halaman Status = sha7.
+- Job `notify`: hasil build ke Discord bila secret `DISCORD_WEBHOOK` ada.
+
+Runner ARM GitHub kadang mengantre > 30 menit. Jalur cadangan dari Pi (sama-sama arm64):
+
+```bash
+cd ~/repository/cctv/nvr
+docker build --build-arg VERSION=$(git rev-parse --short HEAD) -t ghcr.io/tarkiman/cctv-nvr:latest .
+docker save ghcr.io/tarkiman/cctv-nvr:latest | gzip -1 | ssh umma 'gunzip | docker load'
+ssh umma 'cd ~/cctv-nvr/nvr/deploy && docker compose up -d nvrd'
+```
 
 ## Compose
 
-`nvr/deploy/docker-compose.yml`:
+`nvr/deploy/docker-compose.yml` — dua service, keduanya `network_mode: host`:
 
-```yaml
-services:
-  go2rtc:
-    image: alexxit/go2rtc:1.9.14
-    container_name: nvr-go2rtc
-    restart: unless-stopped
-    network_mode: host            # wajib untuk P2P Xiaomi (c301)
-    dns: [192.168.1.1]            # DNS publik via UDP di-drop di jaringan ini
-    volumes:
-      - /DATA/nvr/go2rtc:/config
+| Service | Container | Catatan |
+|---|---|---|
+| `go2rtc` | `nvr-go2rtc` | `alexxit/go2rtc:1.9.14`; host network wajib untuk P2P Xiaomi; `dns: 192.168.1.1` (DNS publik via UDP di-drop di jaringan ini) |
+| `nvrd` | `nvr-nvrd` | `ghcr.io/tarkiman/cctv-nvr:${NVR_TAG:-latest}`, `env_file: .env`, data di `${NVR_DATA}` |
 
-  nvrd:
-    image: ghcr.io/tarkiman/cctv-nvr:${NVR_TAG:-nvr-lite}
-    container_name: nvr-nvrd
-    restart: unless-stopped
-    network_mode: host            # akses go2rtc di 127.0.0.1 tanpa bridge
-    env_file: .env
-    volumes:
-      - /DATA/nvr:/data
-    depends_on: [go2rtc]
-```
+`go2rtc.yaml` mengikat API (`127.0.0.1:1984`) dan RTSP (`127.0.0.1:8556`) ke loopback;
+hanya WebRTC (`:8557`) yang terbuka. Dashboard go2rtc (login ulang Xiaomi) lewat tunnel:
+`ssh -L 1984:127.0.0.1:1984 tarkiman@192.168.1.20` → `http://localhost:1984/add.html`.
 
-Keduanya `network_mode: host` supaya `nvrd` menjangkau go2rtc di `127.0.0.1` dan port
-API go2rtc tidak perlu dibuka ke jaringan.
-
-`go2rtc.yaml` mengikat API ke loopback:
-
-```yaml
-api:
-  listen: "127.0.0.1:1984"   # dashboard go2rtc hanya lewat SSH tunnel
-rtsp:
-  listen: "127.0.0.1:8556"
-webrtc:
-  listen: ":8557"            # perlu terbuka untuk WebRTC dari browser
-  candidates:
-    - 192.168.1.20:8557
-    - 172.22.244.135:8557    # ZeroTier
-```
-
-Dashboard go2rtc (untuk login ulang Xiaomi `c301`) dibuka lewat tunnel:
-`ssh -L 1984:127.0.0.1:1984 tarkiman@192.168.1.20` lalu `http://localhost:1984/add.html`.
-
-## Deploy pertama
+## Deploy pertama (host baru)
 
 ```bash
-# di umma
-sudo mkdir -p /DATA/nvr/go2rtc && sudo chown -R 1001:1001 /DATA/nvr   # uid tarkiman di umma = 1001
-git clone -b nvr-lite git@github.com:tarkiman/cctv.git ~/cctv-nvr
+mkdir -p /DATA/cctv/nvr/go2rtc            # milik uid 1001
+git clone https://github.com/tarkiman/cctv.git ~/cctv-nvr
 cd ~/cctv-nvr/nvr/deploy
-cp .env.example .env                       # isi NVR_ADMIN_USER / NVR_ADMIN_PASSWORD
-cp go2rtc.example.yaml /DATA/nvr/go2rtc/go2rtc.yaml
-# salin sesi Xiaomi + stream c301 dari /DATA/cctv/storage/go2rtc/go2rtc.yaml
-docker compose pull
+cp .env.example .env && chmod 600 .env    # isi NVR_ADMIN_*, NVR_DATA, NVR_LISTEN, webhook
+cp go2rtc.example.yaml /DATA/cctv/nvr/go2rtc/go2rtc.yaml
+docker compose pull && docker compose up -d
 ```
 
-`~/cctv` (deploy Frigate lama, bukan git checkout) dibiarkan apa adanya sebagai jalur
-rollback.
+Kamera RTSP ditambahkan dari web (**Pengaturan → Kamera → Tambah kamera**). Kamera
+Xiaomi ditambahkan dari dashboard go2rtc, lalu **Sinkronkan** di Pengaturan.
 
 ## Update
 
 ```bash
-cd ~/cctv-nvr && git pull --ff-only
-cd nvr/deploy && docker compose pull && docker compose up -d
+# setelah CI hijau untuk commit terbaru di main
+ssh umma 'cd ~/cctv-nvr && git pull --ff-only && cd nvr/deploy && docker compose pull nvrd && docker compose up -d nvrd'
 ```
 
-Image `:nvr-lite` selalu menunjuk build terakhir branch ini. Untuk rollback ke build
-tertentu: `NVR_TAG=<sha> docker compose up -d`.
-
-## Cutover dari Frigate
-
-1. Pastikan image `nvr-lite` sudah lolos CI dan berjalan baik di mesin uji (Pi) dengan
-   satu kamera.
-2. Catat baseline: `docker stats --no-stream`, `free -m` di `umma`.
-3. Hentikan stack lama: `cd ~/cctv && docker compose stop`.
-   (Rekaman Frigate lama di `/DATA/cctv/storage` **tidak dihapus**.)
-4. Jalankan NVR Lite: `cd ~/cctv-nvr/nvr/deploy && docker compose up -d`.
-5. Verifikasi (checklist di bawah) selama minimal 30 menit, lalu cek lagi besok pagi
-   (retensi, timelapse tengah malam).
-6. Setelah 7 hari stabil: hapus container Frigate lama (`docker compose down` di `~/cctv`),
-   arsipkan/hapus `/DATA/cctv/storage/frigate` sesuai keputusan.
-
-### Checklist verifikasi
-- [ ] Semua kamera `running` di halaman Status.
-- [ ] Segmen baru muncul tiap 10 menit di `/DATA/nvr/recordings/<kamera>/`.
-- [ ] Playback segmen terakhir di Chrome Android dan desktop.
-- [ ] Live view dari LAN dan dari ZeroTier.
-- [ ] `latest.jpg` tiap kamera berumur < 2 menit.
-- [ ] CPU total `nvrd`+`go2rtc`+ffmpeg sesuai target di
-      [01 — Tujuan](01-tujuan-dan-lingkup.md#kebutuhan-non-fungsional); swap tidak habis.
-- [ ] Container `aiplatform` tidak terganggu.
-
-## Notifikasi
-
-Diatur lewat `.env` (lihat `.env.example`), lalu `docker compose up -d nvrd`:
-
-| Variabel | Isi |
-|---|---|
-| `NVR_NOTIFY_WEBHOOK` | Satu atau lebih URL (pisahkan koma). Discord webhook → embed; gowa `…/send/message?phone=62…` → pesan WhatsApp (user:password di URL jadi basic auth); URL lain → JSON generik. |
-| `NVR_NOTIFY_OFFLINE_MINUTES` | Lama kamera mati sebelum dikirim alert (default 5). |
-| `NVR_PUBLIC_URL` | Basis tautan di pesan, mis. `https://cctv.tarkiman.com`. |
-
-Yang dikirim:
-- Kamera tidak merekam ≥ 5 menit: satu alert per kejadian, pesan dari `health.Explain`;
-  bila penyebabnya sesi Xiaomi, judulnya "sesi Xiaomi perlu login ulang".
-  Saat pulih: satu pesan berisi lama matinya.
-- Disk bebas < setengah batas retensi (`min_free_percent`, default 10% → alert < 5%),
-  karena di atas itu retensi sendiri yang menjaga ruang; pulih saat ≥ batas.
-- "NVR Lite aktif" setiap nvrd start (memastikan pulih setelah reboot/deploy).
-
-Tombol **Kirim pesan tes** ada di halaman Status (admin).
+Notifikasi "🚀 NVR Lite aktif" di Discord menandai nvrd menyala lagi.
 
 ## Rollback
 
 ```bash
-cd ~/cctv-nvr/nvr/deploy && docker compose stop
-cd ~/cctv && docker compose start
+cd ~/cctv-nvr/nvr/deploy && NVR_TAG=<sha7-sebelumnya> docker compose up -d nvrd
 ```
 
-NVR Lite memakai **:8091**, port yang sama dengan panel lama (keduanya dilayani lewat
-Cloudflare Tunnel), dan **go2rtc lama dan baru sama-sama memakai port 8556/8557 di host
-network** serta membuka sesi P2P ke `c301`. Jadi stack lama dan baru tidak boleh hidup
-bersamaan.
+Migrasi database hanya maju; sebelum rollback melewati migrasi baru, pulihkan
+`backup/nvr-<tanggal>.db` (dibuat harian, 7 terakhir disimpan).
+
+## Konfigurasi (`.env`)
+
+| Variabel | Isi di `umma` / default |
+|---|---|
+| `NVR_LISTEN` | `:8091` (default `:8090`) |
+| `NVR_DATA` | `/DATA/cctv/nvr` (dipakai compose) |
+| `NVR_TAG` | `latest` (dipakai compose) |
+| `NVR_ADMIN_USER` / `NVR_ADMIN_PASSWORD` | admin pertama, hanya dipakai bila belum ada user |
+| `NVR_GO2RTC_URL` / `NVR_GO2RTC_RTSP` | `http://127.0.0.1:1984` / `rtsp://127.0.0.1:8556` |
+| `NVR_TZ` | `Asia/Jakarta` |
+| `NVR_SEGMENT_SECONDS` / `NVR_SNAPSHOT_SECONDS` | `600` / `60` |
+| `NVR_ALLOWED_ORIGINS` | `cctv.tarkiman.com` (origin WebSocket lewat proxy) |
+| `NVR_SECURE_COOKIE` | `false` (otomatis `Secure` lewat HTTPS) |
+| `NVR_NOTIFY_WEBHOOK` | URL webhook Discord (lihat di bawah) |
+| `NVR_NOTIFY_OFFLINE_MINUTES` | `5` |
+| `NVR_PUBLIC_URL` | `https://cctv.tarkiman.com` (tautan di notifikasi) |
+
+## Notifikasi
+
+`NVR_NOTIFY_WEBHOOK` menerima satu atau lebih URL (pisahkan koma): Discord webhook →
+embed; gowa `…/send/message?phone=62…` → pesan WhatsApp (user:password di URL jadi basic
+auth); URL lain → JSON generik.
+
+Yang dikirim:
+- Kamera tidak merekam ≥ 5 menit — satu alert per kejadian dengan penyebab, kolom status,
+  dan snapshot terakhir; bila penyebabnya sesi Xiaomi, judulnya "🔑 … sesi Xiaomi perlu
+  login ulang" plus langkah perbaikan. Satu pesan lagi saat pulih.
+- Disk bebas < setengah batas retensi (default 10% → alert < 5%); pulih saat ≥ batas.
+- "🚀 NVR Lite aktif" setiap nvrd start.
+
+Tombol **Kirim pesan tes** ada di halaman Status (admin). Pratinjau format ke webhook asli:
+`NVR_PREVIEW_WEBHOOK=<url> go test -run TestPreview ./internal/notify`.
 
 ## Akses lewat Cloudflare Tunnel
 
 - `cloudflared` di `umma` meneruskan `cctv.tarkiman.com` ke `localhost:8091`.
-- Cookie sesi otomatis diberi `Secure` bila request datang lewat HTTPS
-  (`X-Forwarded-Proto: https`), jadi login tetap bisa lewat HTTP di LAN
-  (`http://192.168.1.20:8091`).
-- Rate limit login memakai IP asli dari `CF-Connecting-IP`, tapi hanya bila peer-nya
-  loopback (cloudflared lokal); dari peer lain header itu diabaikan.
-- Live view (WebSocket) melewati tunnel; `NVR_ALLOWED_ORIGINS=cctv.tarkiman.com`
-  mengizinkan origin itu bila proxy mengubah header `Host`.
-- WebRTC dari luar LAN belum dikonfigurasi (port UDP 8557 tidak melewati tunnel); live
-  view memakai MSE lewat WebSocket.
+- Cookie sesi otomatis `Secure` bila `X-Forwarded-Proto: https`, jadi login juga bisa lewat
+  HTTP di LAN (`http://192.168.1.20:8091`).
+- Rate limit login memakai `CF-Connecting-IP`, hanya bila peer-nya loopback (cloudflared
+  lokal).
+- Live view (WebSocket MSE) melewati tunnel; WebRTC dari luar LAN belum dikonfigurasi.
+- Cloudflare meng-cache `sw.js` di edge dan menimpa `Cache-Control` browser menjadi 4 jam;
+  aman karena service worker didaftarkan dengan `updateViaCache: 'none'`.
+- Script Cloudflare Web Analytics diblokir CSP (tidak berpengaruh); matikan di dashboard
+  Cloudflare bila ingin konsol bersih.
 
 ## Backup
 
-- Harian 03:00 WIB (worker internal): `VACUUM INTO /DATA/nvr/backup/nvr-<tanggal>.db`,
-  simpan 7 terakhir.
-- Rekaman tidak di-backup (volume besar, umur pendek). Export penting diunduh manual.
-- `go2rtc.yaml` berisi sesi Xiaomi — ikut di-backup bersama `nvr.db`, dengan izin file
-  `600`.
+- Harian (worker internal): `VACUUM INTO /DATA/cctv/nvr/backup/nvr-<tanggal>.db`, 7 terakhir.
+- Rekaman tidak di-backup (volume besar, umur pendek). Klip penting diunduh lewat
+  **Export klip**.
+- `go2rtc.yaml` (sumber + sesi Xiaomi) tidak ikut backup otomatis; salin manual bila
+  memindahkan host.
+
+## Checklist verifikasi setelah perubahan besar
+
+- [ ] Semua kamera `Merekam` di halaman Status; segmen terakhir < 10 menit.
+- [ ] Live grid & satu kamera jalan dari HP (Chrome Android) dan desktop.
+- [ ] Playback & export klip hari ini.
+- [ ] `docker stats --no-stream`: nvrd + go2rtc < 20% CPU, < 200 MB RAM.
+- [ ] Notifikasi "NVR Lite aktif" diterima.

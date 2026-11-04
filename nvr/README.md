@@ -1,12 +1,13 @@
 # NVR Lite — server CCTV rumah buatan sendiri
 
-Pengganti stack Frigate untuk CCTV rumah. Tujuannya satu: **ringan** di hardware kecil
+Pengganti stack Frigate (sudah dihapus dari repo) untuk CCTV rumah. Tujuannya satu: **ringan** di hardware kecil
 (target utama STB `umma`: ZTE B860H, ARM Cortex-A53 4 core, RAM 1,8 GB), tanpa kehilangan
 fungsi yang benar-benar dipakai: live view, rekaman yang bisa diputar ulang, timelapse,
 dan deteksi orang di kamera prioritas.
 
-> Status: **Fase 0 — dokumentasi & rancangan.** Belum ada kode. Semua pengembangan dan
-> deploy diambil dari branch `nvr-lite`.
+> Status: **Fase 1 & 2 selesai, berjalan di `umma` sejak 2026-11-04** di
+> https://cctv.tarkiman.com. Pengembangan di `main`; rencana berikutnya ada di
+> [11 — Rencana pengembangan](docs/11-rencana-pengembangan.md).
 
 ## Kenapa bukan Frigate lagi
 
@@ -35,7 +36,7 @@ proyek ini:
 | Frontend | Vue 3 + Vite + TypeScript, Pinia, Vue Router, Tailwind CSS |
 | Stream hub | [go2rtc](https://github.com/AlexxIT/go2rtc) (sudah dipakai untuk `c301`) |
 | Rekaman/snapshot | `ffmpeg` sebagai subprocess (`-c copy`) |
-| Deploy | Docker Compose, image multi-arch dari GHCR |
+| Deploy | Docker Compose, image arm64 dari GHCR (`:latest`, `:<sha7>`) |
 
 ## Dokumentasi
 
@@ -48,11 +49,12 @@ proyek ini:
 | [05 — Database](docs/05-database.md) | Skema SQLite, migrasi, konvensi query |
 | [06 — API](docs/06-api.md) | Spesifikasi REST + SSE + proxy live |
 | [07 — Frontend & UI/UX](docs/07-frontend-uiux.md) | Halaman, alur, prinsip UX, design token, aksesibilitas |
-| [08 — Deployment](docs/08-deployment.md) | Build, deploy ke `umma` dari branch, cutover dari Frigate, rollback |
+| [08 — Deployment](docs/08-deployment.md) | CI, deploy & update di `umma`, notifikasi, Cloudflare, rollback |
 | [09 — Roadmap](docs/09-roadmap.md) | Fase, kriteria selesai |
 | [10 — Keputusan](docs/10-keputusan.md) | Catatan keputusan arsitektur (ADR) |
+| [11 — Rencana pengembangan](docs/11-rencana-pengembangan.md) | Pekerjaan berikutnya: stabilisasi, Fase 3 deteksi, backlog |
 
-## Struktur folder (rencana)
+## Struktur folder
 
 ```
 nvr/
@@ -63,6 +65,3 @@ nvr/
 ├── deploy/               # docker-compose.yml, contoh .env & go2rtc.yaml
 └── Dockerfile            # multi-stage: web build -> go build -> runtime + ffmpeg
 ```
-
-Stack Frigate lama di root repo tetap ada sampai cutover selesai (lihat
-[08 — Deployment](docs/08-deployment.md#cutover-dari-frigate)), lalu dihapus.

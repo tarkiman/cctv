@@ -2,7 +2,7 @@ name: NVR Lite
 
 on:
   push:
-    branches: [nvr-lite]
+    branches: [main]
     paths: ['nvr/**', '.github/workflows/nvr.yml']
   pull_request:
     paths: ['nvr/**', '.github/workflows/nvr.yml']
@@ -65,7 +65,7 @@ jobs:
           push: true
           build-args: VERSION=${{ steps.meta.outputs.short }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/cctv-nvr:nvr-lite
+            ghcr.io/${{ github.repository_owner }}/cctv-nvr:latest
             ghcr.io/${{ github.repository_owner }}/cctv-nvr:${{ steps.meta.outputs.short }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}

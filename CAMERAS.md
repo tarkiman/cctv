@@ -6,8 +6,9 @@ jangan asumsikan pola kamera lama otomatis berlaku ke kamera baru. Update file i
 setiap kali ada kamera baru ditambahkan atau ada perubahan (IP, kredensial, dll).
 
 Kredensial asli (password) sengaja TIDAK ditulis di sini karena file ini di-commit ke
-git — cek nilai aslinya di `.env` (gitignored). Yang ditulis di sini cuma nama variabel
-dan cara mendapatkannya kalau lupa.
+git. Sumber stream (termasuk kredensial) tersimpan di `go2rtc.yaml` NVR Lite di `umma`
+(`/DATA/cctv/nvr/go2rtc/go2rtc.yaml`, tidak di git) dan bisa diubah lewat web:
+**Pengaturan → Kamera → Sumber & koneksi** (password tidak pernah ditampilkan).
 
 ---
 
@@ -20,10 +21,8 @@ dan cara mendapatkannya kalau lupa.
 | Akses SSH/root | `root` / `ismart12` (default firmware, lihat README proyek Dafang-hacks) |
 | Web UI | `http://192.168.1.14` (port 80) |
 | RTSP | `rtsp://192.168.1.14:8554/unicast` — **tanpa auth** |
-| Video | H.264, 1280x720 (source), `.env`: `FRIGATE_CAM1_HOST` |
-| Frigate key | `cam1` |
-| Status Frigate | Priority-capable (punya token `__DETECT_CAM1__`), aktif/nonaktifnya AI diatur lewat `DETECT_CAMERAS` di `.env` |
-| Catatan | **IP sudah 3x berubah dalam beberapa hari** (`.12`→`.13`→`.14`) meski tercatat "statis" -- kemungkinan sebenarnya masih DHCP biasa (bukan reservation) di router, worth dicek/diperbaiki di sisi router supaya tidak perlu update config manual tiap kali berubah. Cara ganti IP di config: update `FRIGATE_CAM1_HOST` di `.env` lalu `docker compose up -d --force-recreate frigate` (env di-bake saat container dibuat, restart biasa tidak cukup). Kalau kamera cuma mati/nyala tanpa ganti IP, Frigate reconnect otomatis sendiri, tidak perlu tindakan apa pun. Cara dapat RTSP URL: aktifkan RTSP lewat web UI kamera, defaultnya di path `/unicast` port `8554`. |
+| Video | H.264, 1280x720, 25 fps, audio MP3 |
+| Catatan | **IP sudah 3x berubah dalam beberapa hari** (`.12`→`.13`→`.14`) meski tercatat "statis" -- kemungkinan sebenarnya masih DHCP biasa (bukan reservation) di router, worth dicek/diperbaiki di sisi router supaya tidak perlu update config manual tiap kali berubah. Cara ganti IP: **Pengaturan → Kamera → cam1 → Sumber & koneksi**, ganti IP, *Tes koneksi*, lalu *Simpan sumber* (perekam tersambung ulang sendiri). Kalau kamera cuma mati/nyala tanpa ganti IP, perekam reconnect otomatis. Cara dapat RTSP URL: aktifkan RTSP lewat web UI kamera, defaultnya di path `/unicast` port `8554`. |
 
 ## bardi
 
@@ -34,13 +33,11 @@ dan cara mendapatkannya kalau lupa.
 | Web UI / SSH / Telnet | Port 80/22/23 **tertutup/unreachable** dari Pi ini — belum ditemukan cara akses langsung, hanya bisa lewat ONVIF |
 | ONVIF device service | `http://192.168.1.27:10000/onvif/device_service` |
 | ONVIF media service | `http://192.168.1.27:10000/onvif/media_service` (didapat dari `GetCapabilities`) |
-| ONVIF auth | WS-Security UsernameToken + PasswordDigest. User: `admin`. Password: lihat `FRIGATE_BARDI_PASS` di `.env`. |
-| RTSP | `rtsp://192.168.1.27:554/V_ENC_000` — **butuh auth** (user/password sama seperti ONVIF: `FRIGATE_BARDI_USER` / `FRIGATE_BARDI_PASS`) |
+| ONVIF auth | WS-Security UsernameToken + PasswordDigest. User: `admin`. Password: sama dengan RTSP (lihat go2rtc.yaml NVR Lite). |
+| RTSP | `rtsp://192.168.1.27:554/V_ENC_000` — **butuh auth** (user `admin`, password sama seperti ONVIF; tersimpan di go2rtc.yaml NVR Lite) |
 | Video | **HEVC/H.265**, 2304x1296, audio `pcm_alaw` — beda codec dari cam1 (H.264)! |
-| Sub-stream | `rtsp://192.168.1.27:554/V_ENC_001` — **H.264 640x360 @15 fps**, auth sama (dicek `ffprobe` 2026-11-04; `V_ENC_002` = 404). Cocok untuk deteksi: jauh lebih ringan di-decode daripada stream utama HEVC. |
+| Sub-stream | `rtsp://192.168.1.27:554/V_ENC_001` — **H.264 640x360 @15 fps**, auth sama (dicek `ffprobe` 2026-11-04; `V_ENC_002` = 404). Dipakai NVR Lite sebagai stream `bardi_sub` (grid live) dan nanti untuk deteksi (fase 3). |
 | Profile / encoder token | `PROFILE_000` / `V_ENC_000` (bisa beda kalau kamera di-reset firmware) |
-| Frigate key | `bardi` |
-| Status Frigate | Priority-capable, saat ini jadi kamera AI utama (`DETECT_CAMERAS=bardi`) |
 
 **Cara dapat ulang RTSP URL bardi kalau lupa / berubah** (mis. setelah reset firmware):
 1. WS-Discovery: kirim SOAP Probe ke UDP `<ip>:3702` (unicast langsung ke IP kamera,
@@ -66,29 +63,26 @@ standar ONVIF (WS-Discovery UDP probe + SOAP dengan `UsernameToken`/`PasswordDig
 | Model | Xiaomi Smart Camera C301 (model code go2rtc/cloud: `mxiang.camera.c301`) |
 | Firmware | **Stock Mi Home** — bukan custom firmware seperti cam1/bardi. Tidak ada opsi ONVIF di app kameranya sama sekali. |
 | Web UI / SSH / Telnet / RTSP / ONVIF langsung | **Semua tertutup** — port 80, 22, 23, 554, 8554, 10000 semuanya closed/filtered dari Pi ini. Satu-satunya jalan masuk: protokol P2P proprietary Xiaomi (disebut `cs2` di go2rtc). |
-| Cara akses | Lewat container `go2rtc` **standalone** (`docker-compose.yml`, image `alexxit/go2rtc:1.9.14`, **BUKAN** go2rtc bawaan Frigate yang versinya 1.9.10 dan belum support Xiaomi — dukungan `cs2` baru ada di go2rtc ≥1.9.13). Wajib `network_mode: host` karena protokol P2P butuh UDP hole-punching yang gagal di belakang NAT bridge Docker biasa (error kalau salah: `read punch: i/o timeout`). |
-| Login akun cloud | Mi Home account, **region `sg` (Singapura)** — bukan `cn`/China meski akun terdaftar dari Indonesia (Xiaomi tidak punya server khusus Indonesia, Asia Tenggara termasuk Indonesia dilayani server Singapura). `account_id` dan `did` (device ID) TIDAK ditulis di sini (repo publik) — cek `storage/go2rtc/go2rtc.yaml` (gitignored, berisi sesi login cloud terenkripsi + config stream asli). **Sesi login ini kedaluwarsa setelah ~2 minggu idle** (lihat Catatan). |
-| go2rtc stream URL | `xiaomi://<account_id>:sg@192.168.1.2?did=<did>&model=mxiang.camera.c301` (nilai asli ada di `storage/go2rtc/go2rtc.yaml`, key stream `c301`) |
-| go2rtc listen port | API/dashboard `1984`, RTSP restream `8556`, WebRTC `8557` (digeser dari default 8554/8555 supaya tidak bentrok dengan Frigate) |
-| Path yang dikonsumsi Frigate | `rtsp://host.docker.internal:8556/c301` (Frigate ada di bridge network Docker biasa, go2rtc host-networked, jadi dijembatani lewat `host.docker.internal` -> `extra_hosts: host-gateway` di `docker-compose.yml`) |
+| Cara akses | Lewat container `nvr-go2rtc` (`nvr/deploy/docker-compose.yml`, image `alexxit/go2rtc:1.9.14`; dukungan Xiaomi `cs2` butuh go2rtc ≥1.9.13). Wajib `network_mode: host` karena protokol P2P butuh UDP hole-punching yang gagal di belakang NAT bridge Docker (error kalau salah: `read punch: i/o timeout`). |
+| Login akun cloud | Mi Home account, **region `sg` (Singapura)** — bukan `cn`/China meski akun terdaftar dari Indonesia (Xiaomi tidak punya server khusus Indonesia, Asia Tenggara termasuk Indonesia dilayani server Singapura). `account_id` dan `did` (device ID) TIDAK ditulis di sini (repo publik) — cek `/DATA/cctv/nvr/go2rtc/go2rtc.yaml` di `umma` (tidak di git, berisi sesi login cloud + config stream asli). **Sesi login ini kedaluwarsa setelah ~2 minggu idle** (lihat Catatan). |
+| go2rtc stream URL | `xiaomi://<account_id>:sg@192.168.1.2?did=<did>&model=mxiang.camera.c301` (nilai asli ada di go2rtc.yaml NVR Lite, key stream `c301`) |
+| go2rtc listen port | API/dashboard `127.0.0.1:1984` (buka lewat `ssh -L 1984:127.0.0.1:1984 tarkiman@192.168.1.20`), RTSP restream `127.0.0.1:8556`, WebRTC `8557` |
 | Video | **HEVC/H.265**, sekarang 848x480 (sempat 2304x1296 di awal setup -- kemungkinan Mi Home app/camera menurunkan profil stream default, belum dikonfirmasi kenapa), audio Opus (di-transcode go2rtc dari format asli) |
-| Frigate key | `c301` |
-| Status Frigate | Non-prioritas (role `record` saja, tanpa `detect`) per keputusan user 2026-08-10 |
-| Catatan | **Pola berulang, sejauh ini 2x** (2026-08-26 dan 2026-09-11, jarak ~16 hari -- konsisten dengan "sesi basi setelah ~2 minggu idle"): koneksi P2P putus total, go2rtc log `read udp ... i/o timeout` + Frigate log `404 Not Found` saat DESCRIBE. **Fix-nya SELALU sama dan sudah terbukti 2x**: login ulang manual lewat dashboard go2rtc (`/add.html`) dengan akun Mi Home yang sama, region `sg`. Tidak perlu coba-coba hal lain (router/firewall/upgrade versi) dulu -- langsung ke login ulang. IP kamera juga cenderung ikut berubah tiap kali ini terjadi (riwayat `.7`→`.6`→`.2`), jadi setelah login ulang selalu cek device list untuk IP terbaru, bukan asumsi IP lama masih berlaku. Kalau pola ini berulang terus tiap ~2 minggu, pertimbangkan otomasi pengingat (mis. cron/reminder terjadwal) alih-alih menunggu kamera mati dulu baru ketahuan. |
+| Catatan | **Pola berulang, sejauh ini 2x** (2026-08-26 dan 2026-09-11, jarak ~16 hari -- konsisten dengan "sesi basi setelah ~2 minggu idle"): koneksi P2P putus total, go2rtc log `read udp ... i/o timeout` + perekam `404 Not Found` saat DESCRIBE. NVR Lite mengirim notifikasi Discord **"🔑 c301: sesi Xiaomi perlu login ulang"** lengkap dengan langkahnya. **Fix-nya SELALU sama dan sudah terbukti 2x**: login ulang manual lewat dashboard go2rtc (`/add.html`) dengan akun Mi Home yang sama, region `sg`. Tidak perlu coba-coba hal lain (router/firewall/upgrade versi) dulu -- langsung ke login ulang. IP kamera juga cenderung ikut berubah tiap kali ini terjadi (riwayat `.7`→`.6`→`.2`), jadi setelah login ulang selalu cek device list untuk IP terbaru, bukan asumsi IP lama masih berlaku. Sejak NVR Lite, kejadian ini terdeteksi otomatis dalam ~5 menit lewat notifikasi. |
 
 **Cara setup ulang / kamera Xiaomi Mi Home lain yang mirip (stock firmware, tanpa ONVIF):**
 1. Cek dulu apakah benar tidak ada ONVIF (`CAMERAS.md` prosedur ONVIF di atas) — kalau
    masih ada opsi ONVIF di app kameranya, pakai pola `bardi`, jauh lebih sederhana.
 2. Cek model code di [go2rtc Known Xiaomi cameras](https://github.com/AlexxIT/go2rtc/issues/1982)
    apakah didukung (protokol `cs2` jauh lebih stabil dari `tutk`).
-3. Buka dashboard go2rtc standalone (`http://<ip-pi>:1984/add.html`), login akun Mi Home
+3. Buka dashboard go2rtc lewat SSH tunnel (`http://localhost:1984/add.html`), login akun Mi Home
    (coba region `sg` dulu untuk akun Indonesia/Asia Tenggara), cari device, catat
    `account_id`, `region`, `did`.
-4. Tambahkan stream baru di `storage/go2rtc/go2rtc.yaml` (format:
-   `xiaomi://<account_id>:<region>@<ip>?did=<did>&model=<model_code>`), restart service
-   `go2rtc`.
-5. Tambahkan kamera baru di `frigate/config.template.yml` dengan path
-   `rtsp://host.docker.internal:8556/<nama-stream>`.
+4. Tambahkan stream dari dashboard itu (format sumber:
+   `xiaomi://<account_id>:<region>@<ip>?did=<did>&model=<model_code>`); go2rtc menyimpannya
+   ke go2rtc.yaml.
+5. Di NVR Lite: **Pengaturan → Kamera → Sinkronkan** (ikon ↻); kamera baru langsung
+   direkam.
 6. Ingat: login cloud tetap dibutuhkan tiap kali konek (bukan air-gapped sepenuhnya) —
    video streaming-nya sendiri lokal, tapi ambil kunci enkripsi tetap butuh internet ke
    server Xiaomi setiap sesi baru.
@@ -107,7 +101,7 @@ berhasil):
 3. **Pola `c301`** — kalau SEMUA port tertutup dan tidak ada opsi ONVIF di app kamera
    (biasanya kamera Xiaomi Mi Home stock/non-hack), coba go2rtc + protokol P2P Xiaomi,
    ikuti prosedur "Cara setup ulang" di atas.
-4. Selalu cek codec video (`ffprobe`) sebelum asumsi H.264 — beberapa kamera di sini
-   ternyata HEVC/H.265.
-5. Tambahkan entri baru di file ini dengan format yang sama, dan update
-   `frigate/config.template.yml` + `.env.example`.
+4. Selalu cek codec video (tombol *Tes koneksi* menampilkannya) sebelum asumsi H.264 —
+   beberapa kamera di sini ternyata HEVC/H.265; tambahkan sub-stream H.264 bila ada.
+5. Tambahkan kamera RTSP lewat **Pengaturan → Kamera → Tambah kamera** (ada *Tes
+   koneksi*), lalu tambahkan entri baru di file ini dengan format yang sama.

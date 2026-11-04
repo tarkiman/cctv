@@ -78,3 +78,14 @@ dibatalkan tidak dihapus, cukup ditandai **Diganti oleh Dn**.
   dinyatakan stabil.
 - **Konsekuensi:** `main` belum berubah; setelah stabil, branch digabung lewat PR dan
   stack Frigate dihapus dari repo.
+- **Status (2026-11-04):** selesai — lihat D11.
+
+## D11. `nvr-lite` digabung ke `main`, Frigate dihapus
+- **Konteks:** pengguna menyetujui hasil Fase 1–2 pada 2026-11-04.
+- **Keputusan:** `nvr-lite` di-fast-forward ke `main`; pengembangan selanjutnya di `main`.
+  CI membangun `ghcr.io/tarkiman/cctv-nvr:latest` dan `:<sha7>` dari `main`. Stack
+  Frigate (folder `frigate/`, `panel/`, `timelapse/`, `mosquitto/`, compose root,
+  workflow `deploy.yml`) dihapus dari repo, beserta container, image, dan datanya di
+  `umma` dan Pi.
+- **Konsekuensi:** tidak ada lagi jalur rollback ke Frigate. Rollback berarti kembali ke
+  image NVR Lite sebelumnya (`NVR_TAG=<sha7>`).

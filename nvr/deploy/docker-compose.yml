@@ -13,7 +13,7 @@ services:
       - ${NVR_DATA:-/DATA/nvr}/go2rtc:/config
 
   nvrd:
-    image: ghcr.io/tarkiman/cctv-nvr:${NVR_TAG:-nvr-lite}
+    image: ghcr.io/tarkiman/cctv-nvr:${NVR_TAG:-latest}
     container_name: nvr-nvrd
     restart: unless-stopped
     network_mode: host
