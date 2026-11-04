@@ -37,6 +37,7 @@ dan cara mendapatkannya kalau lupa.
 | ONVIF auth | WS-Security UsernameToken + PasswordDigest. User: `admin`. Password: lihat `FRIGATE_BARDI_PASS` di `.env`. |
 | RTSP | `rtsp://192.168.1.27:554/V_ENC_000` — **butuh auth** (user/password sama seperti ONVIF: `FRIGATE_BARDI_USER` / `FRIGATE_BARDI_PASS`) |
 | Video | **HEVC/H.265**, 2304x1296, audio `pcm_alaw` — beda codec dari cam1 (H.264)! |
+| Sub-stream | `rtsp://192.168.1.27:554/V_ENC_001` — **H.264 640x360 @15 fps**, auth sama (dicek `ffprobe` 2026-11-04; `V_ENC_002` = 404). Cocok untuk deteksi: jauh lebih ringan di-decode daripada stream utama HEVC. |
 | Profile / encoder token | `PROFILE_000` / `V_ENC_000` (bisa beda kalau kamera di-reset firmware) |
 | Frigate key | `bardi` |
 | Status Frigate | Priority-capable, saat ini jadi kamera AI utama (`DETECT_CAMERAS=bardi`) |
