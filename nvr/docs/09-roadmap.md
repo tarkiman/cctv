@@ -47,7 +47,7 @@ Kriteria selesai:
 - ✅ Notifikasi webhook (2026-11-04): kamera offline > 5 menit, disk < 10%, sesi Xiaomi `c301`
   kemungkinan kedaluwarsa (termasuk pengingat proaktif di hari ke-14).
 - ✅ Multi-user (2026-11-04): kelola pengguna admin/viewer di Pengaturan (password acak ditampilkan sekali, reset mengeluarkan semua perangkat), daftar perangkat yang masuk + keluarkan; ganti password sendiri sudah ada sejak fase 1.
-- PWA (install, ikon, offline shell).
+- ✅ PWA (2026-11-04): manifest + ikon (maskable, apple-touch), service worker yang hanya meng-cache shell aplikasi (`/api` tidak pernah di-cache), kartu "Pasang aplikasi" di Pengaturan (prompt Android/desktop, petunjuk iOS).
 
 ## Fase 3 — Deteksi
 

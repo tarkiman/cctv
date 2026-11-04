@@ -26,6 +26,9 @@ func spaHandler(web fs.FS) http.Handler {
 		case p == "index.html" || p == "sw.js" || strings.HasSuffix(p, ".webmanifest"):
 			w.Header().Set("Cache-Control", "no-cache")
 		}
+		if strings.HasSuffix(p, ".webmanifest") {
+			w.Header().Set("Content-Type", "application/manifest+json")
+		}
 		files.ServeHTTP(w, r)
 	})
 }

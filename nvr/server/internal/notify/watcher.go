@@ -113,7 +113,7 @@ func (w *Watcher) offlineMessage(cam store.Camera, st health.CameraStatus, since
 	m := Message{
 		Kind: "camera_offline", Level: Alert, Camera: cam.Name, At: now,
 		Title: "🔴 " + cam.Name + " berhenti merekam",
-		URL:   w.link(fmt.Sprintf("/cameras/%d", cam.ID)),
+		URL:   w.link("/camera/" + cam.Slug),
 	}
 	if xiaomi {
 		m.Title = "🔑 " + cam.Name + ": sesi Xiaomi perlu login ulang"
@@ -149,7 +149,7 @@ func (w *Watcher) recoveredMessage(cam store.Camera, since, now time.Time) Messa
 		Kind: "camera_recovered", Level: Resolved, Camera: cam.Name, At: now,
 		Title: "✅ " + cam.Name + " kembali merekam",
 		Text:  "Perekam tersambung lagi; rekaman berlanjut normal.",
-		URL:   w.link(fmt.Sprintf("/cameras/%d", cam.ID)),
+		URL:   w.link("/camera/" + cam.Slug),
 		Fields: []Field{
 			{Name: "Lama mati", Value: humanDuration(now.Sub(since)), Inline: true},
 			{Name: "Mati sejak", At: &since, Inline: true},
@@ -181,13 +181,13 @@ func (w *Watcher) checkDisk(ctx context.Context) {
 			Kind: "disk_low", Level: Alert, Title: "💾 Disk rekaman hampir penuh",
 			Text: "Retensi sudah menghapus rekaman lama tetapi ruang tetap menipis, jadi ada file lain " +
 				"yang memenuhi disk (atau rekaman yang dilindungi). Cek isi `/DATA` di server.",
-			Fields: fields, URL: w.link("/system"),
+			Fields: fields, URL: w.link("/status"),
 		})
 	case w.diskLow && pct >= floor:
 		w.diskLow = false
 		w.send(ctx, Message{
 			Kind: "disk_ok", Level: Resolved, Title: "💾 Disk rekaman kembali lega",
-			Fields: fields, URL: w.link("/system"),
+			Fields: fields, URL: w.link("/status"),
 		})
 	}
 }

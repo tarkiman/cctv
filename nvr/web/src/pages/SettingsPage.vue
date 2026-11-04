@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { LoaderCircle, LogOut, RefreshCw } from 'lucide-vue-next'
+import { CircleCheck, Download, LoaderCircle, LogOut, RefreshCw, Share } from 'lucide-vue-next'
 import { api, ApiError } from '../api/client'
 import type { Camera, Settings, SystemStats } from '../api/types'
 import { useAuth } from '../stores/auth'
@@ -9,6 +9,7 @@ import { useCameras } from '../stores/cameras'
 import { useToast } from '../stores/toast'
 import { fmtBytes } from '../utils/format'
 import { loadPref, savePref } from '../utils/prefs'
+import { usePwaInstall } from '../composables/pwa'
 import UsersSection from '../components/UsersSection.vue'
 import DevicesSection from '../components/DevicesSection.vue'
 
@@ -110,6 +111,12 @@ function setTheme(t: typeof theme.value) {
   savePref('theme', t)
   if (t === 'system') document.documentElement.removeAttribute('data-theme')
   else document.documentElement.dataset.theme = t
+}
+
+// --- install as app ---
+const pwa = usePwaInstall()
+async function installApp() {
+  if (await pwa.install()) toast.ok('Aplikasi dipasang. Buka dari layar utama.')
 }
 
 // --- account ---
@@ -270,6 +277,39 @@ const input = 'w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm outl
         >
           {{ t[1] }}
         </button>
+      </div>
+    </section>
+
+    <!-- Install as app -->
+    <section class="mb-8" aria-labelledby="app-h">
+      <h2 id="app-h" class="mb-3 text-base font-semibold">Aplikasi</h2>
+      <div class="flex max-w-2xl items-start gap-4 rounded-[var(--radius-card)] border border-line bg-surface p-4">
+        <img src="/icons/icon-192.png" alt="" class="size-12 shrink-0 rounded-xl" />
+        <div class="min-w-0 flex-1 text-sm">
+          <p class="font-semibold">Pasang CCTV Rumah di perangkat ini</p>
+          <p class="mt-0.5 text-muted">Buka langsung dari layar utama, layar penuh tanpa bilah browser, dan lebih cepat terbuka.</p>
+          <p v-if="pwa.installed.value" class="mt-3 flex items-center gap-1.5 font-semibold text-ok">
+            <CircleCheck class="size-4" aria-hidden="true" /> Sudah terpasang
+          </p>
+          <button
+            v-else-if="pwa.canPrompt.value"
+            type="button"
+            class="mt-3 flex min-h-10 items-center gap-2 rounded-lg bg-primary px-4 font-semibold text-on-primary"
+            @click="installApp"
+          >
+            <Download class="size-4" aria-hidden="true" /> Pasang aplikasi
+          </button>
+          <p v-else-if="pwa.iosManual.value" class="mt-3 rounded-lg bg-surface-2 p-3">
+            Di <strong>Safari</strong>: ketuk <Share class="inline size-4 align-text-bottom" aria-label="Bagikan" /> <strong>Bagikan</strong>, lalu
+            <strong>Tambah ke Layar Utama</strong>.
+          </p>
+          <p v-else-if="!pwa.secure" class="mt-3 rounded-lg bg-surface-2 p-3">
+            Pemasangan butuh HTTPS. Buka lewat <strong>https://cctv.tarkiman.com</strong>.
+          </p>
+          <p v-else class="mt-3 rounded-lg bg-surface-2 p-3">
+            Buka menu browser (⋮), lalu pilih <strong>Instal aplikasi</strong> atau <strong>Tambahkan ke layar utama</strong>.
+          </p>
+        </div>
       </div>
     </section>
 

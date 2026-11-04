@@ -5,10 +5,13 @@ import { router } from './router'
 import { setUnauthorizedHandler } from './api/client'
 import { useAuth } from './stores/auth'
 import { loadPref } from './utils/prefs'
+import { setupPwa } from './composables/pwa'
 import './styles/main.css'
 
 const theme = loadPref<'system' | 'dark' | 'light'>('theme', 'system')
 if (theme !== 'system') document.documentElement.dataset.theme = theme
+
+setupPwa()
 
 const app = createApp(App)
 app.use(createPinia())
