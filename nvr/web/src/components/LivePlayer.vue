@@ -3,7 +3,7 @@
 //   client -> {"type":"mse","value":"<supported codecs>"}
 //   server -> {"type":"mse","value":"<mime>"} then binary fMP4 fragments.
 // Decoding happens in the browser; the server only remuxes.
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { api } from '../api/client'
 
 const props = withDefaults(defineProps<{ cameraId: number; quality?: 'main' | 'sub'; active?: boolean; fit?: 'contain' | 'cover' }>(), {
@@ -164,10 +164,13 @@ function stop(resetState = true) {
   if (resetState) setState('idle')
 }
 
+// Start only once the <video> element exists: an immediate watcher would run during
+// setup, before mount, find no element and give up.
+onMounted(() => props.active && start())
 watch(
   () => [props.active, props.cameraId, props.quality] as const,
   ([active]) => (active ? start() : stop()),
-  { flush: 'post', immediate: true },
+  { flush: 'post' },
 )
 onBeforeUnmount(() => stop(false))
 
