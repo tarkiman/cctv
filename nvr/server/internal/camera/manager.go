@@ -40,7 +40,8 @@ type Manager struct {
 
 	mu      sync.Mutex
 	ctx     context.Context
-	workers map[int64]*workers
+	workers map[int64]*workers // recorder + snapshot
+	detects map[int64]*workers // detector, separate so toggling it never interrupts recording
 	wg      sync.WaitGroup
 }
 
@@ -56,6 +57,7 @@ func (m *Manager) Start(ctx context.Context) {
 	m.mu.Lock()
 	m.ctx = ctx
 	m.workers = map[int64]*workers{}
+	m.detects = map[int64]*workers{}
 	m.mu.Unlock()
 
 	go func() {
@@ -158,24 +160,55 @@ func (m *Manager) Sync(ctx context.Context) error {
 	return nil
 }
 
-// Reload restarts a camera's workers with its current settings.
+// Reload restarts all of a camera's workers with its current settings.
 func (m *Manager) Reload(ctx context.Context, id int64) error {
 	cam, err := m.Store.Cameras.ByID(ctx, id)
 	if err != nil {
 		return err
 	}
-	m.mu.Lock()
-	old := m.workers[id]
-	delete(m.workers, id)
-	m.mu.Unlock()
-	if old != nil {
-		// Wait for the old recorder to finish its last segment before a new one starts
-		// writing into the same .incoming folder.
-		old.cancel()
-		old.done.Wait()
-	}
+	// Wait for the old recorder to finish its last segment before a new one starts
+	// writing into the same .incoming folder.
+	m.stop(m.workers, id)
+	m.stop(m.detects, id)
 	m.start(*cam)
 	return nil
+}
+
+// ReloadDetect restarts only the detector (after detection was switched on or off), so
+// recording continues without a gap.
+func (m *Manager) ReloadDetect(ctx context.Context, id int64) error {
+	cam, err := m.Store.Cameras.ByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	m.stop(m.detects, id)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.startDetectLocked(*cam)
+	return nil
+}
+
+// stop cancels one worker group of a camera and waits for it to exit.
+func (m *Manager) stop(group map[int64]*workers, id int64) {
+	m.mu.Lock()
+	w := group[id]
+	delete(group, id)
+	m.mu.Unlock()
+	if w != nil {
+		w.cancel()
+		w.done.Wait()
+	}
+}
+
+// spawn runs fn as part of worker group w.
+func (m *Manager) spawn(w *workers, fn func()) {
+	m.wg.Add(1)
+	w.done.Add(1)
+	go func() {
+		defer m.wg.Done()
+		defer w.done.Done()
+		fn()
+	}()
 }
 
 func (m *Manager) start(cam store.Camera) {
@@ -187,15 +220,7 @@ func (m *Manager) start(cam store.Camera) {
 	ctx, cancel := context.WithCancel(m.ctx)
 	w := &workers{cancel: cancel}
 	m.workers[cam.ID] = w
-	run := func(fn func()) {
-		m.wg.Add(1)
-		w.done.Add(1)
-		go func() {
-			defer m.wg.Done()
-			defer w.done.Done()
-			fn()
-		}()
-	}
+	run := func(fn func()) { m.spawn(w, fn) }
 
 	if last, err := m.Store.Recordings.Latest(ctx, cam.ID); err == nil {
 		t := time.Unix(last.EndAt, 0).UTC()
@@ -226,9 +251,20 @@ func (m *Manager) start(cam store.Camera) {
 		run(func() { m.Snapshotter.RunCamera(ctx, cam) })
 	}
 
+	m.startDetectLocked(cam)
+}
+
+// startDetectLocked starts the detector group of a camera; m.mu must be held.
+func (m *Manager) startDetectLocked(cam store.Camera) {
+	if m.ctx == nil || m.ctx.Err() != nil {
+		return
+	}
 	if cam.DetectEnabled && m.Detector != nil {
-		dlog := log.With("worker", "detect")
-		run(func() {
+		ctx, cancel := context.WithCancel(m.ctx)
+		w := &workers{cancel: cancel}
+		m.detects[cam.ID] = w
+		dlog := m.Log.With("camera", cam.Slug, "worker", "detect")
+		m.spawn(w, func() {
 			supervisor.Run(ctx, dlog, func(ctx context.Context) error {
 				return m.Detector.RunCamera(ctx, cam)
 			}, supervisor.Hooks{

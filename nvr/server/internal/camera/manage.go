@@ -152,14 +152,8 @@ func (m *Manager) Remove(ctx context.Context, cam *store.Camera) error {
 	if go2rtc.IsXiaomiSource(all[cam.MainStream]) {
 		return ErrNotEditable
 	}
-	m.mu.Lock()
-	w := m.workers[cam.ID]
-	delete(m.workers, cam.ID)
-	m.mu.Unlock()
-	if w != nil {
-		w.cancel()
-		w.done.Wait()
-	}
+	m.stop(m.workers, cam.ID)
+	m.stop(m.detects, cam.ID)
 	for _, name := range []string{cam.MainStream, cam.MainStream + SubSuffix} {
 		if _, ok := all[name]; ok {
 			if err := m.Go2rtc.DeleteStream(ctx, name); err != nil {

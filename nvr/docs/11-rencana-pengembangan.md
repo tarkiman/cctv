@@ -118,8 +118,8 @@ Keputusan arsitektur: [D12](10-keputusan.md#d12-deteksi-bisa-diatur-per-kamera-m
       `c301` (HEVC utama 848×480) 23% / 68 MB, `cam1` (H.264 utama 720p25) 30% / 61 MB.
       Konfigurasi uji S8: deteksi hanya `bardi`; `c301` & `cam1` off; global 2 fps, ambang 25,
       luas 15‰.
-- [ ] Mengubah saklar deteksi me-restart perekam kamera itu (celah rekaman beberapa detik) —
-      reload hanya worker detektor.
+- [x] Mengubah saklar deteksi kini hanya me-restart worker detektor (grup worker terpisah);
+      ganti nama/retensi/timelapse tidak me-restart apa pun.
 - [ ] **S8**: jalankan di `bardi` semalam, hitung event per jam dan cocokkan sampel dengan
       rekaman (serangga di lampu IR? PTZ melacak apa?).
 

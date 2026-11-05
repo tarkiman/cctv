@@ -61,10 +61,11 @@ async function saveCamera(c: Camera) {
   if (!d.name.trim()) return toast.error('Nama kamera wajib diisi.')
   saving.value = c.id
   try {
+    const restarts = d.record_enabled !== c.record_enabled || d.record_stream !== c.record_stream || d.snapshot_enabled !== c.snapshot_enabled
     const updated = await api.updateCamera(c.id, { ...d, name: d.name.trim() })
     cams.replace(updated)
     delete drafts[c.id]
-    toast.ok(`Pengaturan ${updated.name} disimpan. Perekam dimulai ulang.`)
+    toast.ok(`Pengaturan ${updated.name} disimpan.${restarts ? ' Perekam tersambung ulang (rekaman terputus beberapa detik).' : ''}`)
   } catch (e) {
     toast.error(e instanceof ApiError ? e.message : 'Gagal menyimpan.')
   } finally {

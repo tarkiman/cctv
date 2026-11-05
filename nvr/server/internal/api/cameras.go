@@ -71,6 +71,7 @@ func (s *Server) patchCamera(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	before := *cam
 	var req struct {
 		Name               *string `json:"name"`
 		RecordEnabled      *bool   `json:"record_enabled"`
@@ -137,10 +138,21 @@ func (s *Server) patchCamera(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, err)
 		return
 	}
-	// Worker restarts can take a few seconds (the recorder closes its segment first),
-	// so they happen in the background.
+	// Restart only what changed: a detection toggle never interrupts recording, and a
+	// rename or sort change restarts nothing. Restarts can take a few seconds (the
+	// recorder closes its segment first), so they happen in the background.
+	recorderChanged := before.RecordEnabled != cam.RecordEnabled || before.RecordStream != cam.RecordStream ||
+		before.SnapshotEnabled != cam.SnapshotEnabled
+	detectChanged := before.DetectEnabled != cam.DetectEnabled
 	go func(id int64) {
-		if err := s.Cameras.Reload(s.Cameras.Context(), id); err != nil {
+		var err error
+		switch {
+		case recorderChanged:
+			err = s.Cameras.Reload(s.Cameras.Context(), id)
+		case detectChanged:
+			err = s.Cameras.ReloadDetect(s.Cameras.Context(), id)
+		}
+		if err != nil {
 			s.Log.Error("reload camera", "id", id, "err", err)
 		}
 	}(cam.ID)
