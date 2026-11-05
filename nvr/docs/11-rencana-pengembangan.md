@@ -61,10 +61,35 @@ Target beban: total < 50% CPU `umma` ([01](01-tujuan-dan-lingkup.md#kebutuhan-no
 
 | # | Pertanyaan | Cara | Lolos bila |
 |---|---|---|---|
-| S7 | Berapa ms satu inferensi model orang di A53? | `onnxruntime` arm64 + YOLO nano (input 320) di container uji, 200 frame `bardi_sub` | median < 600 ms, RAM < 150 MB |
+| S7 ✅ | Berapa ms satu inferensi model orang di A53? | `onnxruntime` arm64 + YOLO nano (input 320) di container uji, 200 frame `bardi_sub` | median < 600 ms, RAM < 150 MB |
 | S8 | Motion gate cukup selektif? | Go murni: selisih frame gray 320 px, 2 fps, 24 jam log | malam hari < 1 inferensi/menit tanpa orang; siang tidak melewatkan orang lewat |
 | S9 | CGO di image utama vs layanan terpisah? | Bandingkan ukuran image, waktu build CI arm64, dampak crash | lihat keputusan di bawah |
 | S10 | Kualitas model di kamera ini | 50 snapshot berlabel manual (orang / bukan: kucing, bayangan, motor) | recall orang ≥ 90%, false positive ≤ 1/hari |
+
+#### Hasil S7 (2026-11-05)
+
+244 frame asli `bardi` (200 sub-stream siang 640×360 + 44 frame malam dari rekaman),
+onnxruntime 1.20.1 CPU di `umma`, container dibatasi 500 MB:
+
+| Model (lisensi) | Input | 1 thread | 2 thread | RAM | Catatan |
+|---|---|---|---|---|---|
+| **YOLOX-nano** (Apache-2.0) | 416 | **562 ms** | **355 ms** | 284 MB | dipilih; muat 0,3 dtk |
+| SSD-MobileNet v1 (Apache-2.0) | asli | 874 ms | 568 ms | 360 MB | skor orang asli lebih tinggi (0,97), FP lebih sedikit, tapi muat model 45 dtk |
+| YOLOX-tiny (Apache-2.0) | 416 | 1993 ms | 1110 ms | 303 MB | terlalu lambat |
+| YOLOX-nano int8 dinamis | 416 | 597 ms | 394 ms | 292 MB | tidak lebih cepat, deteksi hilang total → buang |
+
+Temuan:
+- Orang asli (malam, di pagar dan di pintu) terdeteksi YOLOX-nano dengan skor 0,51–0,65.
+- False positive: **kucing di atas tembok** (skor sampai 0,70 di YOLOX-tiny, 0,51 di SSD) dan
+  benda gelap di bawah tiang (0,4–0,5). Butuh ambang ~0,6, konfirmasi 2 frame berturut-turut,
+  dan zona.
+- **Sudut pandang `bardi` berubah dalam hitungan detik** (PTZ/patroli?) — perlu dipastikan;
+  motion gate berbasis selisih frame tidak bekerja saat kamera bergerak.
+- Anggaran CPU: dengan motion gate dan maks 1 inferensi/dtk (1 thread) ≈ 15% CPU total
+  `umma` selama ada gerak, ≈ 0 saat sepi. RAM +~300 MB (tersedia 1,2 GB) — muat.
+- Kesimpulan S7: latensi **lolos** (562 ms < 600 ms) dengan YOLOX-nano fp32, 1 thread; RAM
+  **melebihi target** (284 MB vs 150 MB, angka ini termasuk Python + numpy + Pillow di
+  container uji) tetapi masih muat di RAM tersedia. Ukur ulang di implementasi akhir.
 
 **Keputusan yang perlu diambil setelah S7/S9** (catat sebagai D12):
 - *Opsi 1 — CGO di `nvrd`* (rencana awal [04](04-backend.md#detector-fase-3)): satu
