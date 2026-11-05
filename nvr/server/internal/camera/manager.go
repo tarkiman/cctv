@@ -5,6 +5,7 @@ package camera
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log/slog"
 	"regexp"
 	"sort"
@@ -12,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tarkiman/cctv/nvr/server/internal/detect"
 	"github.com/tarkiman/cctv/nvr/server/internal/go2rtc"
 	"github.com/tarkiman/cctv/nvr/server/internal/health"
 	"github.com/tarkiman/cctv/nvr/server/internal/recorder"
@@ -32,6 +34,7 @@ type Manager struct {
 	Health      *health.Tracker
 	Recorder    *recorder.Recorder
 	Snapshotter *snapshot.Snapshotter
+	Detector    *detect.Worker
 	DataDir     string
 	Log         *slog.Logger
 
@@ -221,5 +224,23 @@ func (m *Manager) start(cam store.Camera) {
 
 	if cam.SnapshotEnabled {
 		run(func() { m.Snapshotter.RunCamera(ctx, cam) })
+	}
+
+	if cam.DetectEnabled && m.Detector != nil {
+		dlog := log.With("worker", "detect")
+		run(func() {
+			supervisor.Run(ctx, dlog, func(ctx context.Context) error {
+				return m.Detector.RunCamera(ctx, cam)
+			}, supervisor.Hooks{
+				OnFailure: func(err error, _ int, _ time.Duration) {
+					if !errors.Is(err, detect.ErrSettingsChanged) {
+						m.Health.SetDetect(cam.ID, "error", err.Error())
+					}
+				},
+			})
+			m.Health.SetDetect(cam.ID, "off", "")
+		})
+	} else {
+		m.Health.SetDetect(cam.ID, "off", "")
 	}
 }

@@ -92,11 +92,11 @@ func (s *CameraStore) SetSubStream(ctx context.Context, id int64, sub sql.NullSt
 func (s *CameraStore) Update(ctx context.Context, c *Camera) error {
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE cameras SET name = ?, record_enabled = ?, record_stream = ?, retention_days = ?,
-			event_retention_days = ?, snapshot_enabled = ?, timelapse_enabled = ?, sort_order = ?,
-			updated_at = ?
+			event_retention_days = ?, snapshot_enabled = ?, timelapse_enabled = ?, detect_enabled = ?,
+			sort_order = ?, updated_at = ?
 		WHERE id = ?`,
 		c.Name, c.RecordEnabled, c.RecordStream, c.RetentionDays, c.EventRetentionDays,
-		c.SnapshotEnabled, c.TimelapseEnabled, c.SortOrder, now(), c.ID)
+		c.SnapshotEnabled, c.TimelapseEnabled, c.DetectEnabled, c.SortOrder, now(), c.ID)
 	return err
 }
 

@@ -79,6 +79,7 @@ func (s *Server) patchCamera(w http.ResponseWriter, r *http.Request) {
 		EventRetentionDays *int    `json:"event_retention_days"`
 		SnapshotEnabled    *bool   `json:"snapshot_enabled"`
 		TimelapseEnabled   *bool   `json:"timelapse_enabled"`
+		DetectEnabled      *bool   `json:"detect_enabled"`
 		SortOrder          *int    `json:"sort_order"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
@@ -125,6 +126,9 @@ func (s *Server) patchCamera(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.TimelapseEnabled != nil {
 		cam.TimelapseEnabled = *req.TimelapseEnabled
+	}
+	if req.DetectEnabled != nil {
+		cam.DetectEnabled = *req.DetectEnabled
 	}
 	if req.SortOrder != nil {
 		cam.SortOrder = *req.SortOrder

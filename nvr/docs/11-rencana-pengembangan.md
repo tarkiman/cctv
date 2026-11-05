@@ -101,15 +101,21 @@ Temuan:
 - **Rekomendasi awal: Opsi 2**, karena isolasi kegagalan lebih penting daripada satu
   binary, dan sejalan dengan rencana "pindahkan inferensi lewat HTTP".
 
-### B1. Motion gate & pipeline (tanpa AI)
+### B1. Motion gate & pipeline (tanpa AI) — dibangun 2026-11-05
 
-- [ ] Worker `detector` per kamera dengan `detect_enabled` (kolom sudah ada), dijalankan
-      supervisor yang sama dengan perekam.
-- [ ] ffmpeg: `bardi_sub` → `fps=2,scale=320:-2,format=gray` → rawvideo ke stdout.
-- [ ] Motion gate di Go: selisih piksel > ambang, area > X%, debounce; parameter per
-      kamera di tabel `settings`/kolom kamera.
-- [ ] Event `motion` sementara (untuk tuning), tidak dikirim notifikasi.
+Keputusan arsitektur: [D12](10-keputusan.md#d12-deteksi-bisa-diatur-per-kamera-model-orang-di-layanan-terpisah).
+
+- [x] Worker `detector` per kamera dengan `detect_enabled`, saklar di Pengaturan → Kamera,
+      dijalankan supervisor yang sama dengan perekam (`internal/detect`).
+- [x] ffmpeg: sub-stream (atau stream utama bila tidak ada) → `fps=N,scale=320:180,format=gray`
+      → rawvideo ke stdout.
+- [x] Motion gate di Go: sel 4×4, selisih > ambang, luas > X‰, konfirmasi 2 frame, selesai
+      setelah 10 dtk tenang; parameter global di Pengaturan → Deteksi (berlaku langsung).
+- [x] Event `motion` (migrasi `0002_events.sql`), penanda kuning di timeline, daftar
+      "Aktivitas gerak", chip "Gerak" di tile live; tanpa notifikasi.
 - [ ] Ukur CPU: target tambahan < 5% total.
+- [ ] **S8**: jalankan di `bardi` semalam, hitung event per jam dan cocokkan sampel dengan
+      rekaman (serangga di lampu IR? PTZ melacak apa?).
 
 ### B2. Deteksi orang
 

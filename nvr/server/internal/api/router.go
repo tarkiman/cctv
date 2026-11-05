@@ -83,6 +83,7 @@ func (s *Server) Routes() http.Handler {
 				r.Get("/cameras/{id}/recordings", s.listRecordings)
 				r.Get("/cameras/{id}/recordings/at", s.recordingAt)
 				r.Get("/cameras/{id}/export/estimate", s.exportEstimate)
+				r.Get("/cameras/{id}/events", s.listEvents)
 				r.Get("/recordings/{id}/next", s.recordingNext)
 				r.Get("/timelapse", s.listTimelapse)
 				r.Post("/live/webrtc", s.liveWebRTC)

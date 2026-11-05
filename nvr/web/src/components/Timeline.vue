@@ -12,6 +12,7 @@ const props = defineProps<{
   now: number
   loading?: boolean
   selection?: { start: Date; end: Date } | null
+  events?: { start: string; end: string | null; label: string }[]
 }>()
 const emit = defineEmits<{ seek: [t: Date] }>()
 
@@ -56,6 +57,17 @@ const ticks = computed(() => {
   }
   return out
 })
+
+// Detected activity, drawn as a strip along the top of the track.
+const marks = computed(() =>
+  (props.events ?? [])
+    .map((ev) => {
+      const s = Math.max(new Date(ev.start).getTime(), view.value.start)
+      const e = Math.min(new Date(ev.end ?? ev.start).getTime() + 5000, view.value.start + view.value.span)
+      return e > s ? { left: pct(s), width: Math.max(pct(e) - pct(s), 0.25), person: ev.label === 'person' } : null
+    })
+    .filter((m): m is { left: number; width: number; person: boolean } => m !== null),
+)
 
 // Range picked for export, drawn over the bars.
 const sel = computed(() => {
@@ -154,6 +166,14 @@ function onKey(e: KeyboardEvent) {
     >
       <div v-if="loading" class="skeleton absolute inset-0 rounded-md" />
       <div v-for="(b, i) in bars" :key="i" class="absolute top-2 bottom-2 rounded-sm bg-range" :style="{ left: `${b.left}%`, width: `${b.width}%` }" />
+      <div
+        v-for="(m, i) in marks"
+        :key="`m${i}`"
+        class="pointer-events-none absolute top-0 h-1.5 rounded-sm"
+        :class="m.person ? 'bg-danger' : 'bg-amber-400'"
+        :style="{ left: `${m.left}%`, width: `${m.width}%` }"
+        aria-hidden="true"
+      />
       <div
         v-if="sel"
         class="pointer-events-none absolute inset-y-0 rounded-sm border-x-2 border-primary bg-primary/25"

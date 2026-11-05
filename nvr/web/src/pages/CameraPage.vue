@@ -17,7 +17,7 @@ import {
   VideoOff,
 } from 'lucide-vue-next'
 import { api } from '../api/client'
-import type { Recording, Timeline as TimelineData } from '../api/types'
+import type { CameraEvent, Recording, Timeline as TimelineData } from '../api/types'
 import { useCameras } from '../stores/cameras'
 import { canPlayCodec, useHotkeys, useNow } from '../composables/media'
 import { addDays, fmtDateLong, fmtRelative, fmtTime, fmtTimeSec, wibDate, wibMidnight } from '../utils/format'
@@ -45,6 +45,7 @@ const videoBox = ref<HTMLElement | null>(null)
 // --- recordings ---
 const date = ref(wibDate(new Date()))
 const timeline = ref<TimelineData | null>(null)
+const events = ref<CameraEvent[]>([])
 const tlLoading = ref(false)
 const player = ref<InstanceType<typeof RecordingPlayer> | null>(null)
 const playhead = ref<Date | null>(null)
@@ -66,9 +67,18 @@ async function loadTimeline() {
   if (!cam.value) return
   tlLoading.value = true
   try {
-    timeline.value = await api.timeline(cam.value.id, date.value)
+    const from = wibMidnight(date.value)
+    const to = new Date(from.getTime() + 86400_000)
+    const iso = (d: Date) => d.toISOString().replace(/\.\d+Z$/, 'Z')
+    const [tl, ev] = await Promise.all([
+      api.timeline(cam.value.id, date.value),
+      api.events(cam.value.id, iso(from), iso(to)).catch(() => [] as CameraEvent[]),
+    ])
+    timeline.value = tl
+    events.value = ev
   } catch {
     timeline.value = null
+    events.value = []
   } finally {
     tlLoading.value = false
   }
@@ -308,7 +318,7 @@ onMounted(() => {
             </div>
           </div>
 
-          <Timeline :day-start="dayStart" :ranges="timeline?.ranges ?? []" :playhead="playhead" :now="now" :loading="tlLoading" :selection="exportSel" @seek="seek" />
+          <Timeline :day-start="dayStart" :ranges="timeline?.ranges ?? []" :playhead="playhead" :now="now" :loading="tlLoading" :selection="exportSel" :events="events" @seek="seek" />
           <p v-if="!tlLoading && timeline && !timeline.ranges.length" class="text-sm text-muted">Tidak ada rekaman pada tanggal ini.</p>
         </div>
       </section>
@@ -325,6 +335,13 @@ onMounted(() => {
             <dd :title="cam.status.last_segment_at ?? ''">{{ fmtRelative(cam.status.last_segment_at, now) }}</dd>
             <dt class="text-muted">Video</dt>
             <dd class="tabular">{{ cam.codec ? `${cam.codec.toUpperCase()} ${cam.width}×${cam.height}` : '—' }}</dd>
+            <dt class="text-muted">Deteksi</dt>
+            <dd>
+              <span v-if="cam.status.detect === 'off'" class="text-muted">Mati</span>
+              <span v-else-if="cam.status.detect === 'error'" class="text-danger" :title="cam.status.detect_error">Bermasalah</span>
+              <span v-else-if="cam.status.motion" class="font-semibold text-amber-500">Ada gerak sekarang</span>
+              <span v-else>Aktif<template v-if="cam.status.last_motion_at"> · gerak {{ fmtRelative(cam.status.last_motion_at, now) }}</template></span>
+            </dd>
             <dt class="text-muted">Retensi</dt>
             <dd>{{ cam.record_enabled ? `${cam.retention_days} hari` : 'Tidak merekam' }}</dd>
           </dl>
@@ -341,6 +358,20 @@ onMounted(() => {
           </ul>
           <p v-else class="text-sm text-muted">Belum ada.</p>
           <p v-if="playhead" class="mt-3 text-xs text-muted tabular">Posisi: {{ fmtTimeSec(playhead) }} WIB</p>
+        </div>
+
+        <div v-if="mode === 'rekaman' && events.length" class="rounded-[var(--radius-card)] border border-line bg-surface p-4">
+          <h2 class="mb-1 text-sm font-semibold">Aktivitas gerak</h2>
+          <p class="mb-2 text-xs text-muted">{{ events.length }} kejadian pada tanggal ini · penanda kuning di timeline</p>
+          <ul class="max-h-56 space-y-0.5 overflow-y-auto text-sm">
+            <li v-for="ev in [...events].reverse()" :key="ev.id">
+              <button type="button" class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left tabular hover:bg-surface-2" @click="seek(new Date(new Date(ev.start).getTime() - 3000))">
+                <span class="size-2 shrink-0 rounded-full" :class="ev.label === 'person' ? 'bg-danger' : 'bg-amber-400'" aria-hidden="true" />
+                {{ fmtTimeSec(new Date(ev.start)) }}
+                <span class="ml-auto text-xs text-muted">{{ ev.end ? `${Math.max(1, Math.round((new Date(ev.end).getTime() - new Date(ev.start).getTime()) / 1000))} dtk` : 'berlangsung' }}</span>
+              </button>
+            </li>
+          </ul>
         </div>
 
         <ExportPanel

@@ -89,3 +89,20 @@ dibatalkan tidak dihapus, cukup ditandai **Diganti oleh Dn**.
   `umma` dan Pi.
 - **Konsekuensi:** tidak ada lagi jalur rollback ke Frigate. Rollback berarti kembali ke
   image NVR Lite sebelumnya (`NVR_TAG=<sha7>`).
+
+## D12. Deteksi bisa diatur per kamera; model orang di layanan terpisah
+- **Konteks:** pengguna (2026-11-05) ingin deteksi orang bisa dinyalakan/dimatikan per
+  kamera sesuai kemampuan server. Spike S7: YOLOX-nano 562 ms/frame, ~300 MB RAM di `umma`.
+  `bardi` adalah kamera PTZ yang **mengikuti gerakan** (auto-tracking).
+- **Keputusan:**
+  - Saklar `detect_enabled` per kamera + pengaturan global (frame/detik, ambang, luas gerak),
+    berlaku tanpa restart (fps → worker tersambung ulang sendiri).
+  - Motion gate Go murni di dalam `nvrd` (biaya ~0); model orang (tahap B2) di layanan
+    `nvr-detect` terpisah lewat HTTP, dipanggil hanya saat ada gerak. Kalau semua kamera
+    mati deteksinya, layanan itu tidak dipakai sama sekali; bisa dipindah ke mesin lain
+    dengan mengganti URL.
+  - Perubahan gambar total (PTZ berputar, pergantian IR) dihitung sebagai gerak: pada
+    kamera auto-tracking itu sinyal ada sesuatu bergerak.
+- **Konsekuensi:** zona (poligon) tidak berlaku untuk kamera PTZ; false positive (kucing)
+  ditekan dengan ambang skor + konfirmasi 2 frame. Crash detektor tidak menghentikan
+  perekaman.

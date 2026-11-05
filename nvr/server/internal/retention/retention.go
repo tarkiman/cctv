@@ -56,6 +56,12 @@ func (j *Janitor) RunOnce(ctx context.Context) error {
 	now := time.Now()
 	deleted := 0
 	for _, cam := range cams {
+		if cam.EventRetentionDays > 0 {
+			cutoff := now.Add(-time.Duration(cam.EventRetentionDays) * 24 * time.Hour).Unix()
+			if _, err := j.Store.Events.DeleteBefore(ctx, cam.ID, cutoff); err != nil {
+				return err
+			}
+		}
 		for _, rule := range []struct {
 			protected bool
 			days      int

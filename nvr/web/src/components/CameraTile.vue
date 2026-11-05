@@ -67,6 +67,13 @@ watch(snapUrl, () => (imgFailed.value = false))
       :class="overlay && 'absolute inset-x-0 top-0 bg-gradient-to-b from-black/70 to-transparent text-white'"
     >
       <span class="truncate text-sm font-semibold">{{ camera.name }}</span>
+      <span
+        v-if="camera.status.motion"
+        class="ml-auto flex shrink-0 items-center gap-1 rounded bg-amber-400 px-1.5 py-0.5 text-[11px] font-bold text-black"
+        role="status"
+      >
+        <span class="size-1.5 animate-pulse rounded-full bg-black" aria-hidden="true" /> Gerak
+      </span>
       <StatusBadge :state="camera.status.state" :compact="overlay" class="shrink-0" />
     </div>
   </RouterLink>

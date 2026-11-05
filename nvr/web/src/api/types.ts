@@ -10,6 +10,10 @@ export interface CameraStatus {
   last_snapshot_at: string | null
   restarts: number
   since: string
+  detect: 'off' | 'starting' | 'running' | 'error'
+  detect_error?: string
+  motion: boolean
+  last_motion_at: string | null
 }
 
 export interface Camera {
@@ -112,7 +116,20 @@ export interface WorkerStatus {
   log: string[]
 }
 
-export type Settings = Record<'min_free_percent' | 'timelapse_keep_days' | 'timelapse_fps', number>
+export type Settings = Record<
+  'min_free_percent' | 'timelapse_keep_days' | 'timelapse_fps' | 'detect_fps' | 'motion_threshold' | 'motion_min_area',
+  number
+>
+
+export interface CameraEvent {
+  id: number
+  camera_id: number
+  label: 'motion' | 'person'
+  score: number | null
+  start: string
+  end: string | null
+  reviewed: boolean
+}
 
 export interface ExportEstimate {
   seconds: number

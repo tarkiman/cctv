@@ -22,6 +22,7 @@ import (
 	"github.com/tarkiman/cctv/nvr/server/internal/camera"
 	"github.com/tarkiman/cctv/nvr/server/internal/config"
 	"github.com/tarkiman/cctv/nvr/server/internal/db"
+	"github.com/tarkiman/cctv/nvr/server/internal/detect"
 	"github.com/tarkiman/cctv/nvr/server/internal/export"
 	"github.com/tarkiman/cctv/nvr/server/internal/ffmpeg"
 	"github.com/tarkiman/cctv/nvr/server/internal/go2rtc"
@@ -95,7 +96,8 @@ func run() error {
 	}
 	mgr := &camera.Manager{
 		Store: st, Go2rtc: g2r, Health: tracker, Recorder: rec, Snapshotter: snap, DataDir: cfg.DataDir,
-		Log: log.With("component", "cameras"),
+		Detector: &detect.Worker{Tools: tools, Store: st, Health: tracker, Log: log.With("component", "detect")},
+		Log:      log.With("component", "cameras"),
 	}
 	mgr.Start(ctx)
 

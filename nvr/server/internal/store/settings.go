@@ -12,12 +12,21 @@ const (
 	SettingMinFreePercent    = "min_free_percent"
 	SettingTimelapseKeepDays = "timelapse_keep_days"
 	SettingTimelapseFPS      = "timelapse_fps"
+	// Detection (applies to cameras with detection on). Frames analysed per second.
+	SettingDetectFPS = "detect_fps"
+	// Brightness change (0..255) for a picture cell to count as changed.
+	SettingMotionThreshold = "motion_threshold"
+	// Changed area that counts as motion, in tenths of a percent (15 = 1.5%).
+	SettingMotionMinArea = "motion_min_area"
 )
 
 var settingDefaults = map[string]int{
 	SettingMinFreePercent:    10,
 	SettingTimelapseKeepDays: 3,
 	SettingTimelapseFPS:      24,
+	SettingDetectFPS:         2,
+	SettingMotionThreshold:   25,
+	SettingMotionMinArea:     15,
 }
 
 // SettingLimits bounds each setting so the UI cannot store nonsense.
@@ -25,6 +34,9 @@ var SettingLimits = map[string][2]int{
 	SettingMinFreePercent:    {1, 50},
 	SettingTimelapseKeepDays: {0, 30},
 	SettingTimelapseFPS:      {1, 60},
+	SettingDetectFPS:         {1, 5},
+	SettingMotionThreshold:   {8, 80},
+	SettingMotionMinArea:     {2, 300},
 }
 
 type SettingStore struct{ db *sqlx.DB }

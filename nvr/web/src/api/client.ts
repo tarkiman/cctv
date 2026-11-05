@@ -1,5 +1,6 @@
 import type {
   Camera,
+  CameraEvent,
   CameraSources,
   Device,
   ExportEstimate,
@@ -88,6 +89,7 @@ export const api = {
   syncCameras: () => request<Camera[]>('POST', '/cameras/sync'),
   snapshotUrl: (id: number, bust?: string | number) => `/api/v1/cameras/${id}/snapshot.jpg${bust ? `?t=${bust}` : ''}`,
 
+  events: (id: number, from: string, to: string) => request<CameraEvent[]>('GET', `/cameras/${id}/events?${q({ from, to })}`),
   timeline: (id: number, date: string) => request<Timeline>('GET', `/cameras/${id}/timeline?${q({ date })}`),
   recordingAt: (id: number, t: Date) => request<RecordingAt>('GET', `/cameras/${id}/recordings/at?${q({ t: t.toISOString().replace(/\.\d+Z$/, 'Z') })}`),
   recordingNext: (recordingId: number) => request<Recording>('GET', `/recordings/${recordingId}/next`),

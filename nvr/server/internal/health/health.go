@@ -20,6 +20,11 @@ type CameraStatus struct {
 	LastSnapshotAt *time.Time       `json:"last_snapshot_at"`
 	Restarts       int              `json:"restarts"`
 	Since          time.Time        `json:"since"`
+	// Detection: "off", "starting", "running" or "error".
+	Detect       string     `json:"detect"`
+	DetectError  string     `json:"detect_error,omitempty"`
+	Motion       bool       `json:"motion"`
+	LastMotionAt *time.Time `json:"last_motion_at"`
 }
 
 type camera struct {
@@ -42,7 +47,7 @@ func (t *Tracker) get(id int64) *camera {
 	c, ok := t.cams[id]
 	if !ok {
 		c = &camera{
-			status: CameraStatus{CameraID: id, State: supervisor.Starting, Since: time.Now().UTC()},
+			status: CameraStatus{CameraID: id, State: supervisor.Starting, Since: time.Now().UTC(), Detect: "off"},
 			log:    ffmpeg.NewLogRing(50),
 		}
 		t.cams[id] = c
@@ -164,4 +169,32 @@ func (t *Tracker) Remove(id int64) {
 	delete(t.cams, id)
 	t.mu.Unlock()
 	t.hub.Publish("camera.removed", map[string]int64{"camera_id": id})
+}
+
+// SetDetect records the detector state of a camera.
+func (t *Tracker) SetDetect(id int64, state, errMsg string) {
+	t.mu.Lock()
+	c := t.get(id)
+	changed := c.status.Detect != state || c.status.DetectError != errMsg
+	c.status.Detect, c.status.DetectError = state, errMsg
+	if state != "running" {
+		c.status.Motion = false
+	}
+	snap := c.status
+	t.mu.Unlock()
+	if changed {
+		t.hub.Publish("camera.status", snap)
+	}
+}
+
+// SetMotion records the start or end of motion on a camera.
+func (t *Tracker) SetMotion(id int64, active bool, at time.Time) {
+	t.mu.Lock()
+	c := t.get(id)
+	c.status.Motion = active
+	at = at.UTC()
+	c.status.LastMotionAt = &at
+	snap := c.status
+	t.mu.Unlock()
+	t.hub.Publish("camera.status", snap)
 }
