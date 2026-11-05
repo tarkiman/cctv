@@ -113,7 +113,13 @@ Keputusan arsitektur: [D12](10-keputusan.md#d12-deteksi-bisa-diatur-per-kamera-m
       setelah 10 dtk tenang; parameter global di Pengaturan → Deteksi (berlaku langsung).
 - [x] Event `motion` (migrasi `0002_events.sql`), penanda kuning di timeline, daftar
       "Aktivitas gerak", chip "Gerak" di tile live; tanpa notifikasi.
-- [ ] Ukur CPU: target tambahan < 5% total.
+- [x] Ukur CPU (2026-11-05, 2 fps): ffmpeg detektor `bardi_sub` **11% satu core / 48 MB**
+      (≈ 2,8% total `umma`) — target < 5% tercapai. Tanpa sub-stream jauh lebih mahal:
+      `c301` (HEVC utama 848×480) 23% / 68 MB, `cam1` (H.264 utama 720p25) 30% / 61 MB.
+      Konfigurasi uji S8: deteksi hanya `bardi`; `c301` & `cam1` off; global 2 fps, ambang 25,
+      luas 15‰.
+- [ ] Mengubah saklar deteksi me-restart perekam kamera itu (celah rekaman beberapa detik) —
+      reload hanya worker detektor.
 - [ ] **S8**: jalankan di `bardi` semalam, hitung event per jam dan cocokkan sampel dengan
       rekaman (serangga di lampu IR? PTZ melacak apa?).
 
