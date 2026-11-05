@@ -125,6 +125,14 @@ Keputusan arsitektur: [D12](10-keputusan.md#d12-deteksi-bisa-diatur-per-kamera-m
 
 ### B2. Deteksi orang
 
+**Layanan `nvr-detect` sudah dibuat (2026-11-05)** — `nvr/detect/` (Python + onnxruntime +
+YOLOX-nano, model di-pin checksum), `POST /detect` (JPEG → kotak `person`/`cat`/`dog`/`car`/
+`motorcycle`/`bicycle` + skor), `GET /healthz`. Di compose sebagai profile opsional `detect`
+(1 core, 300 MB). Diukur di `umma`: **583 ms/inferensi, 674 ms end-to-end, RAM 53 MB**, siap
+3 dtk setelah start (angka RAM 284 MB di S7 ternyata karena skrip uji memuat semua gambar).
+Pada frame S7: orang 0,66 dan 0,51, kucing tidak lagi terbaca orang, false positive tersisa
+≤ 0,47 → ambang awal **0,5** + konfirmasi 2 frame. Belum tersambung ke `nvrd`.
+
 - [ ] Detector (sesuai D12): input frame warna 320 saat gerak, maks 2 inferensi/detik.
 - [ ] Event `person`: mulai saat skor ≥ ambang dua frame berturut-turut, selesai setelah
       30 dtk tanpa orang; simpan snapshot terbaik + kotak.

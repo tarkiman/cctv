@@ -32,7 +32,7 @@ Workflow `.github/workflows/nvr.yml`:
 - Trigger: `push` ke `main` yang mengubah `nvr/**`, pull request, `workflow_dispatch`.
 - Job `test`: `npm run build` (termasuk `vue-tsc`), `gofmt`, `go vet`, `go test -race`.
 - Job `image`: build **arm64** di runner native `ubuntu-24.04-arm`, push
-  `ghcr.io/tarkiman/cctv-nvr:latest` dan `:<sha7>` (paket publik, `umma` menarik tanpa
+  `ghcr.io/tarkiman/cctv-nvr:latest` dan `:<sha7>`, serta `cctv-nvr-detect` dengan tag yang sama (paket publik, `umma` menarik tanpa
   login). Versi di halaman Status = sha7.
 - Job `notify`: hasil build ke Discord bila secret `DISCORD_WEBHOOK` ada.
 
@@ -53,6 +53,7 @@ ssh umma 'cd ~/cctv-nvr/nvr/deploy && docker compose up -d nvrd'
 |---|---|---|
 | `go2rtc` | `nvr-go2rtc` | `alexxit/go2rtc:1.9.14`; host network wajib untuk P2P Xiaomi; `dns: 192.168.1.1` (DNS publik via UDP di-drop di jaringan ini) |
 | `nvrd` | `nvr-nvrd` | `ghcr.io/tarkiman/cctv-nvr:${NVR_TAG:-latest}`, `env_file: .env`, data di `${NVR_DATA}` |
+| `detect` | `nvr-detect` | **opsional** (profile `detect`): model deteksi orang di `127.0.0.1:8092`, maks 1 core (`NVR_DETECT_CPUS`) dan 300 MB. Nyalakan dengan `COMPOSE_PROFILES=detect` di `.env` |
 
 `go2rtc.yaml` mengikat API (`127.0.0.1:1984`) dan RTSP (`127.0.0.1:8556`) ke loopback;
 hanya WebRTC (`:8557`) yang terbuka. Dashboard go2rtc (login ulang Xiaomi) lewat tunnel:

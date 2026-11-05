@@ -26,3 +26,18 @@ services:
       interval: 30s
       timeout: 5s
       start_period: 30s
+
+  # Person detection (fase 3). Opt-in: `docker compose --profile detect up -d`, or set
+  # COMPOSE_PROFILES=detect in .env. Without it nvrd still does motion detection.
+  detect:
+    image: ghcr.io/tarkiman/cctv-nvr-detect:${NVR_TAG:-latest}
+    container_name: nvr-detect
+    restart: unless-stopped
+    profiles: [detect]
+    network_mode: host
+    environment:
+      DETECT_LISTEN: 127.0.0.1:8092
+      DETECT_THREADS: ${NVR_DETECT_THREADS:-1}
+    # Keep recording safe on small hosts: at most one core and 300 MB.
+    cpus: ${NVR_DETECT_CPUS:-1.0}
+    mem_limit: 300m
