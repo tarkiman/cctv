@@ -197,3 +197,36 @@ export interface Grants {
   cameras: number[]
   deny_cameras: number[]
 }
+
+export interface FoundDevice {
+  mac?: string
+  ips: string[]
+  ports: number[]
+  onvif?: { xaddr: string; name?: string; hardware?: string }
+  server?: string
+  gateway: boolean
+  status: 'new' | 'registered' | 'ip_changed' | 'gateway' | 'ignored'
+  camera_id?: number
+  camera_name?: string
+  old_host?: string
+}
+
+export interface DiscoverResult {
+  subnets: { interface: string; cidr: string }[]
+  devices: FoundDevice[]
+}
+
+export interface DiscoverStreams {
+  method: 'onvif' | 'rtsp'
+  streams?: { profile: string; url: string; encoding?: string; width?: number; height?: number }[]
+  guess?: { brand: string; main: string; sub?: string; codec?: string; sub_codec?: string } | null
+  needs_auth?: boolean
+  error?: string
+}
+
+export interface CameraDraft {
+  name: string
+  main: SourceInput
+  sub: SourceInput | null
+  mac?: string
+}

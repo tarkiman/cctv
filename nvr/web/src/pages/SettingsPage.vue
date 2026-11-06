@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { CircleCheck, Download, LoaderCircle, LogOut, Plus, RefreshCw, Share } from 'lucide-vue-next'
+import { CircleCheck, Download, LoaderCircle, LogOut, Plus, Radar, RefreshCw, Share } from 'lucide-vue-next'
 import { api, ApiError } from '../api/client'
-import type { Camera, Settings, SystemStats } from '../api/types'
+import type { Camera, CameraDraft, Settings, SystemStats } from '../api/types'
 import { useAuth } from '../stores/auth'
 import { useCameras } from '../stores/cameras'
 import { useToast } from '../stores/toast'
@@ -13,6 +13,7 @@ import { usePwaInstall } from '../composables/pwa'
 import UsersSection from '../components/UsersSection.vue'
 import LocationsSection from '../components/LocationsSection.vue'
 import AddCameraPanel from '../components/AddCameraPanel.vue'
+import DiscoverPanel from '../components/DiscoverPanel.vue'
 import CameraSourcesPanel from '../components/CameraSourcesPanel.vue'
 import DevicesSection from '../components/DevicesSection.vue'
 
@@ -28,9 +29,18 @@ const drafts = reactive<Record<number, Draft>>({})
 const saving = ref<number | null>(null)
 const syncing = ref(false)
 const adding = ref(false)
+const discovering = ref(false)
+const draft = ref<CameraDraft | null>(null)
+
+function fromDiscovery(d: CameraDraft) {
+  draft.value = d
+  discovering.value = false
+  adding.value = true
+}
 
 function onAdded(cam: Camera) {
   adding.value = false
+  draft.value = null
   cams.list.push(cam)
   cams.load()
   toast.ok(`${cam.name} ditambahkan. Perekaman dimulai dalam beberapa detik.`)
@@ -193,20 +203,29 @@ const input = 'w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm outl
           <RefreshCw class="size-4" :class="syncing && 'animate-spin'" aria-hidden="true" />
         </button>
         <button
+          v-if="!discovering && !adding"
+          type="button"
+          class="flex min-h-10 items-center gap-2 rounded-lg border border-line px-3 text-sm font-semibold hover:bg-surface-2"
+          @click="discovering = true"
+        >
+          <Radar class="size-4" aria-hidden="true" /> Cari kamera
+        </button>
+        <button
           v-if="!adding"
           type="button"
           class="flex min-h-10 items-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-on-primary"
-          @click="adding = true"
+          @click="(draft = null), (adding = true)"
         >
-          <Plus class="size-4" aria-hidden="true" /> Tambah kamera
+          <Plus class="size-4" aria-hidden="true" /> Tambah manual
         </button>
       </div>
       <p class="mb-4 text-sm text-muted">
-        Tambah kamera RTSP di sini, atau ubah alamatnya di
+        <strong>Cari kamera</strong> memindai jaringan dan mengisi URL stream otomatis. Tambah manual untuk kamera yang tidak terdeteksi, atau ubah alamatnya di
         <em>Sumber &amp; koneksi</em> bila IP kamera berubah. Stream yang ditambahkan langsung di go2rtc ikut muncul setelah disinkronkan.
       </p>
 
-      <AddCameraPanel v-if="adding" @added="onAdded" @cancel="adding = false" />
+      <DiscoverPanel v-if="discovering" @add="fromDiscovery" @close="discovering = false" />
+      <AddCameraPanel v-if="adding" :key="draft?.mac ?? 'manual'" :initial="draft" @added="onAdded" @cancel="(adding = false), (draft = null)" />
 
       <div class="grid gap-4 md:grid-cols-2">
         <div v-for="c in cams.list" :key="c.id" class="rounded-[var(--radius-card)] border border-line bg-surface p-4">

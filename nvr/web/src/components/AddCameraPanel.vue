@@ -3,17 +3,22 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { LoaderCircle } from 'lucide-vue-next'
 import { api, ApiError } from '../api/client'
-import type { Camera, SourceInput } from '../api/types'
+import type { Camera, CameraDraft, SourceInput } from '../api/types'
 import { useCameras } from '../stores/cameras'
 import SourceFields from './SourceFields.vue'
 import RtspHints from './RtspHints.vue'
 
+const props = defineProps<{ initial?: CameraDraft | null }>()
 const emit = defineEmits<{ added: [cam: Camera]; cancel: [] }>()
 
 const cams = useCameras()
 const form = reactive({ name: '', slug: '', slugTouched: false, withSub: false, location: cams.locations[0]?.id ?? 0 })
-const main = ref<SourceInput>({ url: '', username: '', password: '' })
-const sub = ref<SourceInput>({ url: '', username: '', password: '' })
+if (props.initial) {
+  form.name = props.initial.name
+  form.withSub = !!props.initial.sub
+}
+const main = ref<SourceInput>(props.initial?.main ? { ...props.initial.main } : { url: '', username: '', password: '' })
+const sub = ref<SourceInput>(props.initial?.sub ? { ...props.initial.sub } : { url: '', username: '', password: '' })
 const busy = ref(false)
 const error = ref('')
 
@@ -47,7 +52,7 @@ async function submit() {
   if (!slugOk.value) return (error.value = 'ID kamera tidak valid.')
   busy.value = true
   try {
-    const cam = await api.createCamera(form.slug, form.name, main.value, form.withSub && sub.value.url ? sub.value : null, form.location)
+    const cam = await api.createCamera(form.slug, form.name, main.value, form.withSub && sub.value.url ? sub.value : null, form.location, props.initial?.mac)
     emit('added', cam)
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : 'Gagal menambah kamera.'

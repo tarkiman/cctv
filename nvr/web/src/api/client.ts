@@ -2,6 +2,8 @@ import type {
   Camera,
   CameraEvent,
   CameraSources,
+  DiscoverResult,
+  DiscoverStreams,
   Device,
   ExportEstimate,
   Grants,
@@ -90,8 +92,13 @@ export const api = {
   cameraSources: (id: number) => request<CameraSources>('GET', `/cameras/${id}/sources`),
   setCameraSources: (id: number, main: SourceInput, sub: SourceInput | null) =>
     request<CameraSources>('PUT', `/cameras/${id}/sources`, { main, sub }),
-  createCamera: (slug: string, name: string, main: SourceInput, sub: SourceInput | null, location_id?: number) =>
-    request<Camera>('POST', '/cameras', { slug, name, main, sub, location_id: location_id ?? 0 }),
+  createCamera: (slug: string, name: string, main: SourceInput, sub: SourceInput | null, location_id?: number, mac?: string) =>
+    request<Camera>('POST', '/cameras', { slug, name, main, sub, location_id: location_id ?? 0, mac: mac ?? '' }),
+  discover: () => request<DiscoverResult>('POST', '/cameras/discover'),
+  discoverStreams: (body: { ip: string; port: number; onvif_xaddr?: string; username: string; password: string }) =>
+    request<DiscoverStreams>('POST', '/cameras/discover/streams', body),
+  linkDevice: (mac: string, camera_id: number) => request<void>('POST', '/cameras/discover/link', { mac, camera_id }),
+  ignoreDevice: (mac: string, ignored: boolean) => request<void>('POST', '/cameras/discover/ignore', { mac, ignored }),
   deleteCamera: (id: number, confirm: string) => request<void>('DELETE', `/cameras/${id}`, { confirm }),
   probeCamera: (source: SourceInput, stream: 'main' | 'sub', cameraId?: number) =>
     request<ProbeResult>('POST', '/cameras/probe', { source, stream, camera_id: cameraId ?? 0 }),

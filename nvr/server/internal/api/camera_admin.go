@@ -78,6 +78,7 @@ func (s *Server) createCamera(w http.ResponseWriter, r *http.Request) {
 		Slug       string `json:"slug"`
 		Name       string `json:"name"`
 		LocationID int64  `json:"location_id"`
+		MAC        string `json:"mac"`
 		sourcesRequest
 	}
 	if err := decodeJSON(r, &req); err != nil {
@@ -111,6 +112,9 @@ func (s *Server) createCamera(w http.ResponseWriter, r *http.Request) {
 			s.internalError(w, r, err)
 			return
 		}
+	}
+	if mac := strings.ToLower(req.MAC); macRe.MatchString(mac) {
+		_ = s.Store.Cameras.SetMAC(r.Context(), cam.ID, mac)
 	}
 	writeJSON(w, http.StatusCreated, s.cameraDTO(r, cam))
 }

@@ -55,6 +55,10 @@ kecuali `POST /auth/login` dan `GET /healthz` butuh sesi.
 | `DELETE` | `/cameras/{id}` | `{confirm: <slug>}`; hapus stream go2rtc, kamera, rekaman, snapshot, timelapse. Xiaomi → `409` (admin) |
 | `PATCH` | `/cameras/{id}` | Ubah sebagian field (nama, rekaman, retensi, deteksi, urutan) |
 | `DELETE` | `/cameras/{id}` | Fase 2. Hapus kamera; `?delete_recordings=true` untuk ikut hapus file |
+| `POST` | `/cameras/discover` | Pindai LAN server (ONVIF WS-Discovery + port RTSP 554/8554 di subnet privat ≤ /22, tanpa Docker/ZeroTier), gabung per MAC (ARP), klasifikasi `new` / `registered` / `ip_changed` / `gateway` (go2rtc) / `ignored`; MAC kamera yang cocok disimpan (admin) |
+| `POST` | `/cameras/discover/streams` | `{ip, port, onvif_xaddr?, username, password}` → ONVIF `GetProfiles`+`GetStreamUri` (`streams[]` terbesar dulu) atau tebak path RTSP umum per merek dengan DESCRIBE (Basic/Digest) → `guess {brand, main, sub, codec}`. Hanya IP di LAN server (admin) |
+| `POST` | `/cameras/discover/link` | `{mac, camera_id}` — tandai perangkat sebagai kamera terdaftar (mis. kamera lewat gerbang) (admin) |
+| `POST` | `/cameras/discover/ignore` | `{mac, ignored}` — sembunyikan/tampilkan perangkat di hasil pindai (admin) |
 | `POST` | `/cameras/probe` | `{source, stream, camera_id?}` → `{ok, info:{codec,width,height,fps,audio}, advice[]}` atau `{ok:false, error}` (pesan Indonesia: login salah, path 404, port ditolak, kamera tidak menjawab). ffprobe langsung ke kamera, timeout 20 dtk (admin) |
 | `GET` | `/cameras/{id}/snapshot.jpg` | Snapshot terbaru (`Cache-Control: no-cache`, `ETag`) |
 

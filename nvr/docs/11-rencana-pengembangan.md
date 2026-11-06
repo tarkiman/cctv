@@ -183,6 +183,16 @@ lokasi punya STB gerbang (go2rtc relay lewat ZeroTier) — lihat
 - [ ] Saat `pipit` dipindah: cek ZeroTier *direct*, upload internet, lalu tambah kamera lokasi itu.
 - [ ] Nanti (opsional): buffer lokal di gerbang untuk mengisi celah saat internet lokasi putus.
 
+### Cari kamera (2026-11-06)
+
+- [x] Tombol **Cari kamera** (Pengaturan → Kamera): ONVIF WS-Discovery + sapuan port RTSP di LAN
+      `umma`, digabung per MAC; kategori baru / terdaftar / IP berubah / gerbang / diabaikan.
+- [x] Tambah dengan isian otomatis: ONVIF `GetStreamUri` (uji `bardi`: utama 2304×1296 +
+      sub 640×360 langsung terisi) atau tebak path RTSP 13 pola merek (DESCRIBE + Digest).
+- [x] MAC kamera dipelajari; IP berubah → **Perbarui sumber** satu klik (password lama dipakai).
+- [ ] Pindai lokasi lain lewat agen di gerbang (pipit).
+- [ ] Notifikasi offline menyarankan IP baru bila kamera ditemukan di alamat lain.
+
 ## Tahap C — Backlog (belum dijadwalkan)
 
 Urut kira-kira dari manfaat terbesar:

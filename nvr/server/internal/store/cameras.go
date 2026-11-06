@@ -23,6 +23,7 @@ type Camera struct {
 	DetectEnabled      bool           `db:"detect_enabled"`
 	SortOrder          int            `db:"sort_order"`
 	LocationID         sql.NullInt64  `db:"location_id"`
+	MAC                sql.NullString `db:"mac"`
 	CreatedAt          int64          `db:"created_at"`
 	UpdatedAt          int64          `db:"updated_at"`
 }
@@ -48,7 +49,7 @@ type CameraStore struct{ db *sqlx.DB }
 
 const cameraCols = `id, slug, name, main_stream, sub_stream, source_managed, record_enabled,
 	record_stream, retention_days, event_retention_days, snapshot_enabled, timelapse_enabled,
-	detect_enabled, sort_order, location_id, created_at, updated_at`
+	detect_enabled, sort_order, location_id, mac, created_at, updated_at`
 
 func (s *CameraStore) List(ctx context.Context) ([]Camera, error) {
 	var out []Camera
@@ -105,5 +106,33 @@ func (s *CameraStore) Update(ctx context.Context, c *Camera) error {
 // Delete removes a camera with its source rows and recording index (ON DELETE CASCADE).
 func (s *CameraStore) Delete(ctx context.Context, id int64) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM cameras WHERE id = ?`, id)
+	return err
+}
+
+// SetMAC records (or clears, with "") the MAC address of a camera.
+func (s *CameraStore) SetMAC(ctx context.Context, id int64, mac string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE cameras SET mac = NULLIF(?, ''), updated_at = ? WHERE id = ?`, mac, now(), id)
+	return err
+}
+
+// IgnoredMACs lists devices hidden from scan results.
+func (s *CameraStore) IgnoredMACs(ctx context.Context) (map[string]bool, error) {
+	var macs []string
+	if err := s.db.SelectContext(ctx, &macs, `SELECT mac FROM discovery_ignored`); err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(macs))
+	for _, m := range macs {
+		out[m] = true
+	}
+	return out, nil
+}
+
+func (s *CameraStore) SetIgnored(ctx context.Context, mac string, ignored bool) error {
+	if ignored {
+		_, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO discovery_ignored (mac, created_at) VALUES (?, ?)`, mac, now())
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `DELETE FROM discovery_ignored WHERE mac = ?`, mac)
 	return err
 }
