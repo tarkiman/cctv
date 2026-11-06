@@ -52,7 +52,7 @@ func (s *Server) cameraFromPath(w http.ResponseWriter, r *http.Request, param st
 		return nil, false
 	}
 	cam, err := s.Store.Cameras.ByID(r.Context(), id)
-	if errors.Is(err, store.ErrNotFound) {
+	if errors.Is(err, store.ErrNotFound) || (err == nil && !canSee(r, cam)) {
 		writeError(w, http.StatusNotFound, "camera_not_found", "Kamera tidak ditemukan.")
 		return nil, false
 	}

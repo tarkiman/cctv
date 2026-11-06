@@ -154,3 +154,65 @@ func TestGowaRequest(t *testing.T) {
 		t.Error("redact leaks password")
 	}
 }
+
+func TestWatcherLocationOutage(t *testing.T) {
+	ctx := context.Background()
+	d, err := db.Open(ctx, filepath.Join(t.TempDir(), "nvr.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	st := store.New(d)
+	ibu, _ := st.Locations.Create(ctx, "Rumah Ibu")
+	var ids []int64
+	for i, slug := range []string{"garasi", "dapur"} {
+		id, _ := st.Cameras.CreateDiscovered(ctx, slug, slug, sql.NullString{}, i)
+		c, _ := st.Cameras.ByID(ctx, id)
+		c.LocationID.Int64 = ibu
+		st.Cameras.Update(ctx, c)
+		ids = append(ids, id)
+	}
+	home, _ := st.Cameras.CreateDiscovered(ctx, "teras", "teras", sql.NullString{}, 3) // stays up
+
+	var got sink
+	srv := httptest.NewServer(http.HandlerFunc(got.handler))
+	defer srv.Close()
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	tr := health.New(sse.NewHub())
+	clock := time.Unix(1_800_000_000, 0)
+	w := &Watcher{
+		Notifier: New([]string{srv.URL}, nil, "t", log), Store: st, Health: tr,
+		Disk: func() (uint64, uint64) { return 100, 50 }, OfflineAfter: 5 * time.Minute, Log: log,
+		now: func() time.Time { return clock },
+	}
+	step := func(d time.Duration) { clock = clock.Add(d); w.Check(ctx) }
+	tr.SetState(home, supervisor.Running, "")
+	for _, id := range ids {
+		tr.SetState(id, supervisor.Running, "")
+	}
+	step(0)
+	for _, id := range ids { // the gateway dies: both cameras go down together
+		tr.SetState(id, supervisor.Offline, "go2rtc tidak bisa terhubung ke kamera.")
+	}
+	step(time.Minute)
+	step(5 * time.Minute)
+	step(time.Minute)
+	tr.SetState(ids[0], supervisor.Running, "") // one camera back; the other is broken itself
+	step(time.Minute)
+	tr.SetState(ids[1], supervisor.Running, "")
+	step(time.Minute)
+
+	want := []string{"location_down", "location_up", "camera_recovered"}
+	k := got.kinds()
+	if len(k) != len(want) {
+		t.Fatalf("kinds = %v, want %v", k, want)
+	}
+	for i := range want {
+		if k[i] != want[i] {
+			t.Fatalf("kinds = %v, want %v", k, want)
+		}
+	}
+	if got.msgs[0].Title != "📡 Lokasi Rumah Ibu tidak terjangkau" || got.msgs[1].Level != Warning {
+		t.Fatalf("messages = %+v", got.msgs[:2])
+	}
+}

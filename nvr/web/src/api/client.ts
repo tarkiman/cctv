@@ -4,6 +4,8 @@ import type {
   CameraSources,
   Device,
   ExportEstimate,
+  Grants,
+  Location,
   RecordingAt,
   ProbeResult,
   Recording,
@@ -70,6 +72,13 @@ export const api = {
   deleteSession: (id: string) => request<void>('DELETE', `/auth/sessions/${encodeURIComponent(id)}`),
   logoutOthers: () => request<void>('POST', '/auth/sessions/logout-others'),
 
+  locations: () => request<Location[]>('GET', '/locations'),
+  createLocation: (name: string) => request<Location[]>('POST', '/locations', { name }),
+  renameLocation: (id: number, name: string) => request<Location[]>('PATCH', `/locations/${id}`, { name }),
+  deleteLocation: (id: number) => request<Location[]>('DELETE', `/locations/${id}`),
+  userAccess: (id: number) => request<Grants>('GET', `/users/${id}/access`),
+  setUserAccess: (id: number, g: Grants) => request<Grants>('PUT', `/users/${id}/access`, g),
+
   users: () => request<UserItem[]>('GET', '/users'),
   createUser: (username: string, password: string, role: UserItem['role']) => request<UserItem[]>('POST', '/users', { username, password, role }),
   updateUser: (id: number, patch: { role?: UserItem['role']; password?: string }) => request<UserItem[]>('PATCH', `/users/${id}`, patch),
@@ -81,8 +90,8 @@ export const api = {
   cameraSources: (id: number) => request<CameraSources>('GET', `/cameras/${id}/sources`),
   setCameraSources: (id: number, main: SourceInput, sub: SourceInput | null) =>
     request<CameraSources>('PUT', `/cameras/${id}/sources`, { main, sub }),
-  createCamera: (slug: string, name: string, main: SourceInput, sub: SourceInput | null) =>
-    request<Camera>('POST', '/cameras', { slug, name, main, sub }),
+  createCamera: (slug: string, name: string, main: SourceInput, sub: SourceInput | null, location_id?: number) =>
+    request<Camera>('POST', '/cameras', { slug, name, main, sub, location_id: location_id ?? 0 }),
   deleteCamera: (id: number, confirm: string) => request<void>('DELETE', `/cameras/${id}`, { confirm }),
   probeCamera: (source: SourceInput, stream: 'main' | 'sub', cameraId?: number) =>
     request<ProbeResult>('POST', '/cameras/probe', { source, stream, camera_id: cameraId ?? 0 }),

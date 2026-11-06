@@ -59,6 +59,7 @@ func (s *Server) Routes() http.Handler {
 			r.Use(s.Auth.Require(func(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusUnauthorized, "unauthenticated", "Silakan masuk terlebih dahulu.")
 			}))
+			r.Use(s.withGrants)
 
 			// Long-lived responses: no timeout middleware.
 			r.Get("/stream", s.stream)
@@ -89,6 +90,7 @@ func (s *Server) Routes() http.Handler {
 				r.Post("/live/webrtc", s.liveWebRTC)
 
 				r.Get("/system/stats", s.systemStats)
+				r.Get("/locations", s.listLocations)
 
 				r.Group(func(r chi.Router) {
 					r.Use(requireAdmin)
@@ -107,6 +109,11 @@ func (s *Server) Routes() http.Handler {
 					r.Post("/users", s.createUser)
 					r.Patch("/users/{id}", s.updateUser)
 					r.Delete("/users/{id}", s.deleteUser)
+					r.Get("/users/{id}/access", s.getUserAccess)
+					r.Put("/users/{id}/access", s.putUserAccess)
+					r.Post("/locations", s.createLocation)
+					r.Patch("/locations/{id}", s.renameLocation)
+					r.Delete("/locations/{id}", s.deleteLocation)
 				})
 			})
 		})

@@ -32,6 +32,7 @@ export interface Camera {
   timelapse_enabled: boolean
   detect_enabled: boolean
   sort_order: number
+  location_id: number
   status: CameraStatus
 }
 
@@ -142,6 +143,7 @@ export interface UserItem {
   id: number
   username: string
   role: 'admin' | 'viewer'
+  access_all: boolean
   sessions: number
   last_seen: string | null
   created_at: string
@@ -181,4 +183,17 @@ export interface ProbeResult {
   error?: string
   info?: { codec: string; width: number; height: number; fps: number; audio?: string }
   advice?: string[]
+}
+
+export interface Location {
+  id: number
+  name: string
+  cameras: number
+}
+
+export interface Grants {
+  access_all: boolean
+  locations: number[]
+  cameras: number[]
+  deny_cameras: number[]
 }

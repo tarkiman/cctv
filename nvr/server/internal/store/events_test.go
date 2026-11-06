@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"testing"
+
+	"github.com/tarkiman/cctv/nvr/server/internal/store"
 )
 
 func TestEventsAndDetectFlag(t *testing.T) {
@@ -36,5 +38,49 @@ func TestEventsAndDetectFlag(t *testing.T) {
 	}
 	if n, _ := s.Events.DeleteBefore(ctx, id, 1500); n != 1 {
 		t.Fatalf("deleted %d", n)
+	}
+}
+
+func TestLocationsAndGrants(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	home, _ := s.Locations.Default(ctx)
+	ibu, err := s.Locations.Create(ctx, "Rumah Ibu")
+	if err != nil {
+		t.Fatal(err)
+	}
+	teras, _ := s.Cameras.CreateDiscovered(ctx, "teras", "teras", sql.NullString{}, 0)
+	tamu, _ := s.Cameras.CreateDiscovered(ctx, "tamu", "tamu", sql.NullString{}, 1)
+	garasi, _ := s.Cameras.CreateDiscovered(ctx, "garasi", "garasi", sql.NullString{}, 2)
+	cam, _ := s.Cameras.ByID(ctx, garasi)
+	if !cam.LocationID.Valid || cam.LocationID.Int64 != home {
+		t.Fatalf("new camera location = %+v, want default %d", cam.LocationID, home)
+	}
+	cam.LocationID.Int64 = ibu
+	if err := s.Cameras.Update(ctx, cam); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Locations.Delete(ctx, ibu); err != store.ErrLocationInUse {
+		t.Fatalf("delete non-empty location: %v", err)
+	}
+
+	uid, _ := s.Users.Create(ctx, "ibu", "x", "viewer")
+	g, _ := s.Access.Get(ctx, uid)
+	if !g.All {
+		t.Fatal("new users should default to all cameras")
+	}
+	// Rumah Ibu (all) + Teras from Rumah, but not Ruang Tamu.
+	if err := s.Access.Set(ctx, uid, store.Grants{Locations: []int64{ibu}, Cameras: []int64{teras}}); err != nil {
+		t.Fatal(err)
+	}
+	g, _ = s.Access.Get(ctx, uid)
+	if g.All || !g.Allows(garasi, ibu) || !g.Allows(teras, home) || g.Allows(tamu, home) {
+		t.Fatalf("grants = %+v", g)
+	}
+	// Whole Rumah except Ruang Tamu.
+	s.Access.Set(ctx, uid, store.Grants{Locations: []int64{home}, DenyCameras: []int64{tamu}})
+	g, _ = s.Access.Get(ctx, uid)
+	if !g.Allows(teras, home) || g.Allows(tamu, home) || g.Allows(garasi, ibu) {
+		t.Fatalf("deny grants = %+v", g)
 	}
 }

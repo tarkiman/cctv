@@ -81,7 +81,7 @@ func (t *Tracker) SetState(id int64, state supervisor.State, message string) {
 	snap := c.status
 	t.mu.Unlock()
 	if changed {
-		t.hub.Publish("camera.status", snap)
+		t.hub.PublishCamera(snap.CameraID, "camera.status", snap)
 	}
 }
 
@@ -109,7 +109,7 @@ func (t *Tracker) SegmentWritten(id int64, at time.Time) {
 	c.status.LastSegmentAt = &at
 	snap := c.status
 	t.mu.Unlock()
-	t.hub.Publish("camera.status", snap)
+	t.hub.PublishCamera(snap.CameraID, "camera.status", snap)
 }
 
 func (t *Tracker) SnapshotTaken(id int64, at time.Time) {
@@ -117,7 +117,7 @@ func (t *Tracker) SnapshotTaken(id int64, at time.Time) {
 	at = at.UTC()
 	t.get(id).status.LastSnapshotAt = &at
 	t.mu.Unlock()
-	t.hub.Publish("snapshot.updated", map[string]any{"camera_id": id, "at": at})
+	t.hub.PublishCamera(id, "snapshot.updated", map[string]any{"camera_id": id, "at": at})
 }
 
 // Seed sets the last known segment time at startup (from the database).
@@ -183,7 +183,7 @@ func (t *Tracker) SetDetect(id int64, state, errMsg string) {
 	snap := c.status
 	t.mu.Unlock()
 	if changed {
-		t.hub.Publish("camera.status", snap)
+		t.hub.PublishCamera(snap.CameraID, "camera.status", snap)
 	}
 }
 
@@ -196,5 +196,5 @@ func (t *Tracker) SetMotion(id int64, active bool, at time.Time) {
 	c.status.LastMotionAt = &at
 	snap := c.status
 	t.mu.Unlock()
-	t.hub.Publish("camera.status", snap)
+	t.hub.PublishCamera(snap.CameraID, "camera.status", snap)
 }

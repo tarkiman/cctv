@@ -31,12 +31,19 @@ type Watcher struct {
 
 	now     func() time.Time
 	cams    map[int64]*camWatch
+	locs    map[int64]*locWatch
 	diskLow bool
 }
 
 type camWatch struct {
-	badSince time.Time
-	alerted  bool
+	badSince   time.Time
+	alerted    bool
+	byLocation bool // alerted as part of a location outage
+}
+
+type locWatch struct {
+	alerted bool
+	since   time.Time
 }
 
 func (w *Watcher) Enabled() bool { return w != nil && w.Notifier.Enabled() }
@@ -65,6 +72,7 @@ func (w *Watcher) Check(ctx context.Context) {
 	}
 	if w.cams == nil {
 		w.cams = map[int64]*camWatch{}
+		w.locs = map[int64]*locWatch{}
 	}
 	now := w.now()
 	cams, err := w.Store.Cameras.List(ctx)
@@ -72,29 +80,109 @@ func (w *Watcher) Check(ctx context.Context) {
 		w.Log.Warn("notify: list cameras", "err", err)
 		return
 	}
+
+	// Track every recording camera, then decide per location: when all cameras of a
+	// location are down (a gateway or the site's internet failed) one location alert
+	// replaces the per-camera alerts.
+	type tracked struct {
+		cam     store.Camera
+		st      health.CameraStatus
+		cw      *camWatch
+		healthy bool
+	}
+	byLoc := map[int64][]*tracked{}
+	var order []int64
 	for _, cam := range cams {
 		if !cam.RecordEnabled {
 			delete(w.cams, cam.ID)
 			continue
 		}
-		st := w.Health.Get(cam.ID)
 		cw := w.cams[cam.ID]
 		if cw == nil {
 			cw = &camWatch{}
 			w.cams[cam.ID] = cw
 		}
-		healthy := st.State == supervisor.Running || st.State == supervisor.Disabled
-		switch {
-		case healthy && cw.alerted:
-			w.send(ctx, w.recoveredMessage(cam, cw.badSince, now))
-			*cw = camWatch{}
-		case healthy:
-			*cw = camWatch{}
-		case cw.badSince.IsZero():
+		st := w.Health.Get(cam.ID)
+		t := &tracked{cam: cam, st: st, cw: cw, healthy: st.State == supervisor.Running || st.State == supervisor.Disabled}
+		if !t.healthy && cw.badSince.IsZero() {
 			cw.badSince = now
-		case !cw.alerted && now.Sub(cw.badSince) >= w.OfflineAfter:
-			cw.alerted = true
-			w.send(ctx, w.offlineMessage(cam, st, cw.badSince, now))
+		}
+		loc := cam.LocationID.Int64
+		if _, ok := byLoc[loc]; !ok {
+			order = append(order, loc)
+		}
+		byLoc[loc] = append(byLoc[loc], t)
+	}
+
+	names := map[int64]string{}
+	if locs, err := w.Store.Locations.List(ctx); err == nil {
+		for _, l := range locs {
+			names[l.ID] = l.Name
+		}
+	}
+	for _, loc := range order {
+		list := byLoc[loc]
+		lw := w.locs[loc]
+		if lw == nil {
+			lw = &locWatch{}
+			w.locs[loc] = lw
+		}
+		allDown, anyUp := len(list) >= 2, false
+		since := now
+		for _, t := range list {
+			if t.healthy {
+				allDown, anyUp = false, true
+				continue
+			}
+			if now.Sub(t.cw.badSince) < w.OfflineAfter {
+				allDown = false
+			}
+			if t.cw.badSince.Before(since) {
+				since = t.cw.badSince
+			}
+		}
+		switch {
+		case !lw.alerted && allDown:
+			lw.alerted, lw.since = true, since
+			for _, t := range list {
+				t.cw.alerted, t.cw.byLocation = true, true
+			}
+			down := make([]store.Camera, 0, len(list))
+			for _, t := range list {
+				down = append(down, t.cam)
+			}
+			w.send(ctx, w.locationDownMessage(names[loc], down, since, now))
+		case lw.alerted && anyUp:
+			var still []string
+			for _, t := range list {
+				t.cw.byLocation = false
+				if t.healthy {
+					*t.cw = camWatch{}
+				} else {
+					still = append(still, t.cam.Name)
+				}
+			}
+			w.send(ctx, w.locationUpMessage(names[loc], len(list), still, lw.since, now))
+			*lw = locWatch{}
+		}
+	}
+
+	for _, loc := range order {
+		for _, t := range byLoc[loc] {
+			cw := t.cw
+			if cw.byLocation {
+				continue // covered by the location alert
+			}
+			switch {
+			case t.healthy && cw.alerted:
+				w.send(ctx, w.recoveredMessage(t.cam, cw.badSince, now))
+				*cw = camWatch{}
+			case t.healthy:
+				*cw = camWatch{}
+			case !cw.alerted && now.Sub(cw.badSince) >= w.OfflineAfter:
+				cw.alerted = true
+				w.send(ctx, w.offlineMessage(t.cam, t.st, cw.badSince, now))
+			}
 		}
 	}
 	w.checkDisk(ctx)
@@ -155,6 +243,41 @@ func (w *Watcher) recoveredMessage(cam store.Camera, since, now time.Time) Messa
 			{Name: "Mati sejak", At: &since, Inline: true},
 			{Name: "Pulih", At: &now, Inline: true},
 		},
+	}
+	return m
+}
+
+func (w *Watcher) locationDownMessage(location string, cams []store.Camera, since, now time.Time) Message {
+	names := make([]string, 0, len(cams))
+	for _, c := range cams {
+		names = append(names, c.Name)
+	}
+	return Message{
+		Kind: "location_down", Level: Alert, At: now,
+		Title: "📡 Lokasi " + location + " tidak terjangkau",
+		Text: fmt.Sprintf("Semua %d kamera di lokasi ini berhenti merekam bersamaan. Kemungkinan internet, listrik, "+
+			"atau perangkat gerbang (mis. pipit) di lokasi itu mati.", len(cams)),
+		Fields: []Field{
+			{Name: "Kamera", Value: strings.Join(names, ", ")},
+			{Name: "Sudah", Value: humanDuration(now.Sub(since)), Inline: true},
+			{Name: "Mulai", At: &since, Inline: true},
+		},
+		URL: w.link("/status"),
+	}
+}
+
+func (w *Watcher) locationUpMessage(location string, total int, still []string, since, now time.Time) Message {
+	m := Message{
+		Kind: "location_up", Level: Resolved, At: now,
+		Title:  "✅ Lokasi " + location + " kembali terjangkau",
+		Text:   fmt.Sprintf("Kamera tersambung lagi setelah %s.", humanDuration(now.Sub(since))),
+		Fields: []Field{{Name: "Terputus sejak", At: &since, Inline: true}, {Name: "Pulih", At: &now, Inline: true}},
+		URL:    w.link("/status"),
+	}
+	if len(still) > 0 {
+		m.Level = Warning
+		m.Text += fmt.Sprintf(" %d dari %d kamera masih bermasalah.", len(still), total)
+		m.Fields = append(m.Fields, Field{Name: "Masih bermasalah", Value: strings.Join(still, ", ")})
 	}
 	return m
 }

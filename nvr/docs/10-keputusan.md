@@ -106,3 +106,17 @@ dibatalkan tidak dihapus, cukup ditandai **Diganti oleh Dn**.
 - **Konsekuensi:** zona (poligon) tidak berlaku untuk kamera PTZ; false positive (kucing)
   ditekan dengan ambang skor + konfirmasi 2 frame. Crash detektor tidak menghentikan
   perekaman.
+
+## D13. Lokasi sebagai grup kamera dan dasar hak akses
+- **Konteks:** pengguna punya CCTV di lokasi lain, direkam terpusat di `umma` lewat gerbang
+  (`pipit`). Pilihan yang dibahas: akses per user langsung, grup user, atau grup kamera.
+- **Keputusan:** setiap kamera masuk tepat satu **lokasi**. Akses viewer: `access_all`
+  (semua, termasuk yang baru), atau daftar lokasi (otomatis mencakup kamera baru) dengan
+  pengecualian kamera (`deny_camera`), plus kamera tunggal dari lokasi lain. Admin selalu
+  semua. Belum ada grup user.
+- **Penegakan:** satu middleware memuat izin per request; `cameraFromPath`, live (WS/WebRTC),
+  rekaman per ID, timelapse, statistik, dan SSE (event kamera difilter per koneksi)
+  memeriksanya. Kamera yang tidak boleh dilihat dijawab `404`, bukan `403`.
+- **Konsekuensi:** perubahan izin berlaku pada request berikutnya; koneksi SSE yang sudah
+  terbuka memakai izin saat tersambung sampai tersambung ulang. Notifikasi Discord masih
+  satu channel untuk semua (webhook per lokasi bisa ditambahkan).

@@ -11,6 +11,11 @@ const cams = useCameras()
 const layout = ref<Layout>(loadPref('live.layout', 'auto'))
 const saver = ref<boolean>(loadPref('live.saver', false))
 const focusId = ref<number | null>(loadPref('live.focus', null))
+// 0 = all locations. Tabs only show when the user sees more than one location.
+const locationId = ref<number>(loadPref('live.location', 0))
+const locationTabs = computed(() => cams.locations.filter((l) => cams.list.some((c) => c.location_id === l.id)))
+const shown = computed(() => (locationId.value && locationTabs.value.some((l) => l.id === locationId.value) ? cams.list.filter((c) => c.location_id === locationId.value) : cams.list))
+const shownOnline = computed(() => shown.value.filter((c) => c.status.state === 'running').length)
 const wall = ref(false)
 const wallEl = ref<HTMLElement | null>(null)
 const chromeVisible = ref(true)
@@ -19,6 +24,7 @@ let hideTimer: number | undefined
 watch(layout, (v) => savePref('live.layout', v))
 watch(saver, (v) => savePref('live.saver', v))
 watch(focusId, (v) => savePref('live.focus', v))
+watch(locationId, (v) => savePref('live.location', v))
 
 const layouts: { id: Layout; label: string; icon: unknown }[] = [
   { id: 'auto', label: 'Otomatis', icon: LayoutGrid },
@@ -42,12 +48,12 @@ const gridClass = computed(() => {
   }
 })
 
-const focused = computed(() => cams.list.find((c) => c.id === focusId.value) ?? cams.list[0])
-const others = computed(() => cams.list.filter((c) => c.id !== focused.value?.id))
+const focused = computed(() => shown.value.find((c) => c.id === focusId.value) ?? shown.value[0])
+const others = computed(() => shown.value.filter((c) => c.id !== focused.value?.id))
 
 // Wall mode fills the screen: pick a column count that keeps tiles as large as possible.
-const wallCols = computed(() => Math.max(1, Math.ceil(Math.sqrt(cams.list.length))))
-const wallRows = computed(() => Math.max(1, Math.ceil(cams.list.length / wallCols.value)))
+const wallCols = computed(() => Math.max(1, Math.ceil(Math.sqrt(shown.value.length))))
+const wallRows = computed(() => Math.max(1, Math.ceil(shown.value.length / wallCols.value)))
 
 async function enterWall() {
   wall.value = true
@@ -91,7 +97,7 @@ onBeforeUnmount(() => {
       <div class="mr-auto w-full sm:w-auto">
         <h1 class="text-xl font-bold">Live</h1>
         <p class="text-sm text-muted">
-          <span class="tabular">{{ cams.online }}/{{ cams.list.length }}</span> kamera merekam
+          <span class="tabular">{{ shownOnline }}/{{ shown.length }}</span> kamera merekam
         </p>
       </div>
 
@@ -113,12 +119,12 @@ onBeforeUnmount(() => {
       </div>
 
       <select
-        v-if="layout === 'focus' && cams.list.length > 1"
+        v-if="layout === 'focus' && shown.length > 1"
         v-model="focusId"
         class="min-h-10 rounded-lg border border-line bg-surface px-2 text-sm"
         aria-label="Kamera utama"
       >
-        <option v-for="c in cams.list" :key="c.id" :value="c.id">{{ c.name }}</option>
+        <option v-for="c in shown" :key="c.id" :value="c.id">{{ c.name }}</option>
       </select>
 
       <button
@@ -135,7 +141,7 @@ onBeforeUnmount(() => {
       <button
         type="button"
         class="flex min-h-10 items-center gap-2 rounded-lg border border-line px-3 text-sm font-medium hover:bg-surface-2"
-        :disabled="!cams.list.length"
+        :disabled="!shown.length"
         @click="enterWall"
       >
         <Expand class="size-4" aria-hidden="true" />
@@ -143,6 +149,20 @@ onBeforeUnmount(() => {
         <span class="sr-only sm:hidden">Mode dinding</span>
       </button>
     </header>
+
+    <nav v-if="locationTabs.length > 1" class="-mt-1 mb-4 flex gap-1 overflow-x-auto" aria-label="Lokasi">
+      <button
+        v-for="t in [{ id: 0, name: 'Semua lokasi', cameras: cams.list.length }, ...locationTabs]"
+        :key="t.id"
+        type="button"
+        class="flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-medium"
+        :class="locationId === t.id ? 'border-primary bg-primary text-on-primary' : 'border-line hover:bg-surface-2'"
+        :aria-pressed="locationId === t.id"
+        @click="locationId = t.id"
+      >
+        {{ t.name }} <span class="text-xs opacity-75 tabular">{{ t.id ? cams.list.filter((c) => c.location_id === t.id).length : cams.list.length }}</span>
+      </button>
+    </nav>
 
     <!-- Loading -->
     <div v-if="!cams.loaded && cams.loading" class="grid gap-4" :class="gridClass">
@@ -172,7 +192,7 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-else class="grid gap-4" :class="gridClass">
-      <CameraTile v-for="c in cams.list" :key="c.id" :camera="c" :live="!saver" />
+      <CameraTile v-for="c in shown" :key="c.id" :camera="c" :live="!saver" />
     </div>
 
     <!-- Wall mode -->
@@ -185,7 +205,7 @@ onBeforeUnmount(() => {
       @pointermove="poke"
       @click.capture.prevent="poke"
     >
-      <div v-for="c in cams.list" :key="c.id" class="min-h-0 [&_.aspect-video]:aspect-auto [&_.aspect-video]:h-full [&>div]:h-full [&_a]:h-full [&_a]:rounded-none [&_a]:border-0">
+      <div v-for="c in shown" :key="c.id" class="min-h-0 [&_.aspect-video]:aspect-auto [&_.aspect-video]:h-full [&>div]:h-full [&_a]:h-full [&_a]:rounded-none [&_a]:border-0">
         <CameraTile :camera="c" :live="!saver" :overlay="chromeVisible" />
       </div>
       <button

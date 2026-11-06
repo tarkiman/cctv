@@ -35,7 +35,7 @@ const now = useNow(30_000)
         <div class="flex items-center justify-between gap-2 px-3 py-2.5">
           <div class="min-w-0">
             <p class="truncate text-sm font-semibold">{{ c.name }}</p>
-            <p class="text-xs text-muted">Segmen terakhir {{ fmtRelative(c.status.last_segment_at, now) }}</p>
+            <p class="text-xs text-muted"><template v-if="cams.locationLabel(c)">{{ cams.locationLabel(c) }} · </template>Segmen terakhir {{ fmtRelative(c.status.last_segment_at, now) }}</p>
           </div>
           <span class="flex items-center gap-2">
             <StatusBadge :state="c.status.state" compact />

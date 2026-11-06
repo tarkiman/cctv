@@ -1,10 +1,11 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { api } from '../api/client'
-import type { Camera, CameraStatus } from '../api/types'
+import type { Camera, CameraStatus, Location } from '../api/types'
 
 export const useCameras = defineStore('cameras', () => {
   const list = ref<Camera[]>([])
+  const locations = ref<Location[]>([])
   const loading = ref(false)
   const loaded = ref(false)
   const error = ref<string | null>(null)
@@ -16,13 +17,15 @@ export const useCameras = defineStore('cameras', () => {
 
   const byId = computed(() => new Map(list.value.map((c) => [c.id, c])))
   const bySlug = computed(() => new Map(list.value.map((c) => [c.slug, c])))
+  // Location label for a camera, only when there is more than one location.
+  const locationLabel = (c: Camera) => (locations.value.length > 1 ? (locations.value.find((l) => l.id === c.location_id)?.name ?? '') : '')
   const online = computed(() => list.value.filter((c) => c.status.state === 'running').length)
 
   async function load() {
     loading.value = true
     error.value = null
     try {
-      list.value = await api.cameras()
+      ;[list.value, locations.value] = await Promise.all([api.cameras(), api.locations()])
       loaded.value = true
       for (const c of list.value) if (c.status.last_snapshot_at) snapshotAt.value[c.id] = c.status.last_snapshot_at
     } catch (e) {
@@ -65,5 +68,5 @@ export const useCameras = defineStore('cameras', () => {
     source = null
   }
 
-  return { list, loading, loaded, error, snapshotAt, connected, alert, byId, bySlug, online, load, replace, remove, connect, disconnect }
+  return { list, loading, loaded, error, snapshotAt, connected, alert, byId, bySlug, online, locations, locationLabel, load, replace, remove, connect, disconnect }
 })

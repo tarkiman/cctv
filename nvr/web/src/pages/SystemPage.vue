@@ -140,7 +140,10 @@ onBeforeUnmount(() => clearInterval(timer))
         <tbody>
           <template v-for="c in cams.list" :key="c.id">
             <tr class="border-b border-line last:border-0">
-              <td class="px-4 py-3 font-medium">{{ c.name }}</td>
+              <td class="px-4 py-3 font-medium">
+                {{ c.name }}
+                <span v-if="cams.locationLabel(c)" class="block text-xs font-normal text-muted">{{ cams.locationLabel(c) }}</span>
+              </td>
               <td class="px-4 py-3">
                 <StatusBadge :state="c.status.state" />
                 <p v-if="c.status.message" class="mt-1 max-w-xs text-xs text-muted">{{ c.status.message }}</p>

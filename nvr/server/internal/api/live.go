@@ -18,7 +18,7 @@ func (s *Server) liveWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cam, err := s.Store.Cameras.ByID(r.Context(), id)
-	if err != nil {
+	if err != nil || !canSee(r, cam) {
 		writeError(w, http.StatusNotFound, "camera_not_found", "Kamera tidak ditemukan.")
 		return
 	}
@@ -79,7 +79,7 @@ func (s *Server) liveWebRTC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cam, err := s.Store.Cameras.ByID(r.Context(), id)
-	if err != nil {
+	if err != nil || !canSee(r, cam) {
 		writeError(w, http.StatusNotFound, "camera_not_found", "Kamera tidak ditemukan.")
 		return
 	}

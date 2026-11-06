@@ -21,6 +21,7 @@ type userDTO struct {
 	ID       int64      `json:"id"`
 	Username string     `json:"username"`
 	Role     string     `json:"role"`
+	AllCams  bool       `json:"access_all"`
 	Sessions int        `json:"sessions"`
 	LastSeen *time.Time `json:"last_seen"`
 	Created  time.Time  `json:"created_at"`
@@ -36,7 +37,7 @@ func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]userDTO, 0, len(users))
 	for _, u := range users {
-		d := userDTO{ID: u.ID, Username: u.Username, Role: u.Role, Sessions: u.Sessions, Created: unixTime(u.CreatedAt)}
+		d := userDTO{ID: u.ID, Username: u.Username, Role: u.Role, AllCams: u.AccessAll || u.Role == "admin", Sessions: u.Sessions, Created: unixTime(u.CreatedAt)}
 		if u.LastSeen > 0 {
 			t := unixTime(u.LastSeen)
 			d.LastSeen = &t

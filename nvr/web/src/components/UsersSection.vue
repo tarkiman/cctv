@@ -2,12 +2,13 @@
 // Admin: manage who can sign in. Viewers can watch live and recordings and export clips;
 // only admins change cameras, settings and users.
 import { onMounted, reactive, ref } from 'vue'
-import { Copy, KeyRound, LoaderCircle, Trash2, UserPlus } from 'lucide-vue-next'
+import { Copy, Eye, KeyRound, LoaderCircle, Trash2, UserPlus } from 'lucide-vue-next'
 import { api, ApiError } from '../api/client'
 import type { UserItem } from '../api/types'
 import { useAuth } from '../stores/auth'
 import { useToast } from '../stores/toast'
 import { fmtRelative, randomPassword } from '../utils/format'
+import UserAccessEditor from './UserAccessEditor.vue'
 
 const auth = useAuth()
 const toast = useToast()
@@ -15,6 +16,7 @@ const users = ref<UserItem[]>([])
 const loading = ref(true)
 const busy = ref<number | 'new' | null>(null)
 const confirmDelete = ref<number | null>(null)
+const accessOpen = ref<number | null>(null)
 let confirmTimer: number | undefined
 
 // Password shown once after create/reset, so the admin can pass it on.
@@ -178,6 +180,7 @@ const input = 'w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm outl
               <span v-if="u.id === auth.user?.id" class="ml-1 rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-semibold text-muted">Anda</span>
             </p>
             <p class="text-xs text-muted">
+              {{ u.role === 'admin' || u.access_all ? 'Semua kamera' : 'Kamera terbatas' }} ·
               {{ u.sessions ? `${u.sessions} perangkat · aktif ${fmtRelative(u.last_seen)}` : 'Tidak sedang masuk' }}
             </p>
           </div>
@@ -193,6 +196,15 @@ const input = 'w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm outl
             <option value="viewer">Viewer</option>
           </select>
           <div v-if="u.id !== auth.user?.id" class="flex items-center gap-1">
+            <button
+              v-if="u.role === 'viewer'"
+              type="button"
+              class="flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold hover:bg-surface-2"
+              :aria-expanded="accessOpen === u.id"
+              @click="accessOpen = accessOpen === u.id ? null : u.id"
+            >
+              <Eye class="size-3.5" aria-hidden="true" /> Akses kamera
+            </button>
             <button
               type="button"
               class="flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold hover:bg-surface-2 disabled:opacity-60"
@@ -213,6 +225,12 @@ const input = 'w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm outl
               <Trash2 class="size-3.5" aria-hidden="true" /> {{ confirmDelete === u.id ? 'Yakin hapus?' : 'Hapus' }}
             </button>
           </div>
+          <UserAccessEditor
+            v-if="accessOpen === u.id"
+            :user="u"
+            @close="accessOpen = null"
+            @saved="(g) => ((accessOpen = null), (u.access_all = g.access_all))"
+          />
         </li>
       </ul>
     </div>

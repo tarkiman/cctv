@@ -11,13 +11,14 @@ type User struct {
 	Username     string `db:"username" json:"username"`
 	PasswordHash string `db:"password_hash" json:"-"`
 	Role         string `db:"role" json:"role"`
+	AccessAll    bool   `db:"access_all" json:"-"`
 	CreatedAt    int64  `db:"created_at" json:"-"`
 	UpdatedAt    int64  `db:"updated_at" json:"-"`
 }
 
 type UserStore struct{ db *sqlx.DB }
 
-const userCols = `id, username, password_hash, role, created_at, updated_at`
+const userCols = `id, username, password_hash, role, access_all, created_at, updated_at`
 
 func (s *UserStore) Count(ctx context.Context) (int, error) {
 	var n int
@@ -70,7 +71,7 @@ type UserSummary struct {
 func (s *UserStore) List(ctx context.Context) ([]UserSummary, error) {
 	var out []UserSummary
 	err := s.db.SelectContext(ctx, &out, `
-		SELECT u.id, u.username, u.password_hash, u.role, u.created_at, u.updated_at,
+		SELECT u.id, u.username, u.password_hash, u.role, u.access_all, u.created_at, u.updated_at,
 		       COUNT(s.id) AS sessions, COALESCE(MAX(s.last_seen), 0) AS last_seen
 		FROM users u LEFT JOIN sessions s ON s.user_id = u.id AND s.expires_at > ?
 		GROUP BY u.id ORDER BY u.role, u.username`, now())

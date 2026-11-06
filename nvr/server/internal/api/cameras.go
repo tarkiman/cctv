@@ -26,6 +26,7 @@ type cameraDTO struct {
 	SnapshotEnabled    bool                `json:"snapshot_enabled"`
 	TimelapseEnabled   bool                `json:"timelapse_enabled"`
 	DetectEnabled      bool                `json:"detect_enabled"`
+	LocationID         int64               `json:"location_id"`
 	SortOrder          int                 `json:"sort_order"`
 	Status             health.CameraStatus `json:"status"`
 }
@@ -36,7 +37,7 @@ func (s *Server) cameraDTO(r *http.Request, c *store.Camera) cameraDTO {
 		RecordEnabled: c.RecordEnabled, RecordStream: c.RecordStream,
 		RetentionDays: c.RetentionDays, EventRetentionDays: c.EventRetentionDays,
 		SnapshotEnabled: c.SnapshotEnabled, TimelapseEnabled: c.TimelapseEnabled,
-		DetectEnabled: c.DetectEnabled, SortOrder: c.SortOrder,
+		DetectEnabled: c.DetectEnabled, SortOrder: c.SortOrder, LocationID: c.LocationID.Int64,
 		Status: s.Health.Get(c.ID),
 	}
 	if last, err := s.Store.Recordings.Latest(r.Context(), c.ID); err == nil {
@@ -46,7 +47,7 @@ func (s *Server) cameraDTO(r *http.Request, c *store.Camera) cameraDTO {
 }
 
 func (s *Server) listCameras(w http.ResponseWriter, r *http.Request) {
-	cams, err := s.Store.Cameras.List(r.Context())
+	cams, err := s.visibleCameras(r)
 	if err != nil {
 		s.internalError(w, r, err)
 		return
@@ -81,6 +82,7 @@ func (s *Server) patchCamera(w http.ResponseWriter, r *http.Request) {
 		SnapshotEnabled    *bool   `json:"snapshot_enabled"`
 		TimelapseEnabled   *bool   `json:"timelapse_enabled"`
 		DetectEnabled      *bool   `json:"detect_enabled"`
+		LocationID         *int64  `json:"location_id"`
 		SortOrder          *int    `json:"sort_order"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
@@ -127,6 +129,13 @@ func (s *Server) patchCamera(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.TimelapseEnabled != nil {
 		cam.TimelapseEnabled = *req.TimelapseEnabled
+	}
+	if req.LocationID != nil {
+		if !s.Store.Locations.Exists(r.Context(), *req.LocationID) {
+			writeError(w, http.StatusBadRequest, "invalid_location", "Lokasi tidak ditemukan.")
+			return
+		}
+		cam.LocationID.Int64, cam.LocationID.Valid = *req.LocationID, true
 	}
 	if req.DetectEnabled != nil {
 		cam.DetectEnabled = *req.DetectEnabled

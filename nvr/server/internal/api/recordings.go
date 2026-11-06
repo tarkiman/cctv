@@ -139,6 +139,9 @@ func (s *Server) recordingNext(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cur, err := s.Store.Recordings.ByID(r.Context(), id)
+	if err == nil && !s.canSeeID(r, cur.CameraID) {
+		err = store.ErrNotFound
+	}
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "no_recording", "Rekaman tidak ditemukan.")
 		return
@@ -166,6 +169,9 @@ func (s *Server) recordingFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rec, err := s.Store.Recordings.ByID(r.Context(), id)
+	if err == nil && !s.canSeeID(r, rec.CameraID) {
+		err = store.ErrNotFound
+	}
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "no_recording", "Rekaman tidak ditemukan.")
 		return
@@ -178,7 +184,7 @@ func (s *Server) recordingFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) listTimelapse(w http.ResponseWriter, r *http.Request) {
-	cams, err := s.Store.Cameras.List(r.Context())
+	cams, err := s.visibleCameras(r)
 	if err != nil {
 		s.internalError(w, r, err)
 		return

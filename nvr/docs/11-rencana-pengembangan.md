@@ -171,13 +171,15 @@ lokasi punya STB gerbang (go2rtc relay lewat ZeroTier) — lihat
 [08 — Gerbang lokasi](08-deployment.md#gerbang-lokasi-go2rtc-relay-mis-pipit).
 
 - [x] Gerbang `pipit` terpasang; `cam1` disimulasikan lewat `pipit` (masih satu jaringan).
-- [ ] **Lokasi** sebagai grup kamera (1 kamera = 1 lokasi); kamera yang ada → "Rumah".
-- [ ] Akses user per lokasi (otomatis mencakup kamera baru) + pengecualian per kamera;
-      admin melihat semua. Ditegakkan di semua jalur: daftar, live, snapshot, rekaman, export,
+- [x] **Lokasi** sebagai grup kamera (1 kamera = 1 lokasi); kamera yang ada → "Rumah" (migrasi `0003_locations`).
+- [x] Akses user per lokasi (otomatis mencakup kamera baru) + pengecualian per kamera;
+      admin melihat semua ([D13](10-keputusan.md#d13-lokasi-sebagai-grup-kamera-dan-dasar-hak-akses)). Ditegakkan di semua jalur: daftar, live, snapshot, rekaman, export,
       timelapse, event, SSE, Status.
-- [ ] Tab per lokasi di Live; filter lokasi di Rekaman/Status.
-- [ ] Notifikasi tingkat lokasi: "📡 Lokasi X tidak terjangkau (n kamera)" menggantikan n alert
-      kamera; webhook per lokasi (opsional).
+- [x] Tab per lokasi di Live; label lokasi di Rekaman/Status.
+- [x] Notifikasi tingkat lokasi: "📡 Lokasi X tidak terjangkau" bila semua (≥ 2) kamera lokasi
+      mati ≥ 5 menit, menggantikan alert per kamera; pesan pulih menyebut kamera yang masih
+      bermasalah.
+- [ ] Webhook notifikasi per lokasi (opsional).
 - [ ] Saat `pipit` dipindah: cek ZeroTier *direct*, upload internet, lalu tambah kamera lokasi itu.
 - [ ] Nanti (opsional): buffer lokal di gerbang untuk mengisi celah saat internet lokasi putus.
 

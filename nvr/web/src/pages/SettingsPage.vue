@@ -11,6 +11,7 @@ import { fmtBytes } from '../utils/format'
 import { loadPref, savePref } from '../utils/prefs'
 import { usePwaInstall } from '../composables/pwa'
 import UsersSection from '../components/UsersSection.vue'
+import LocationsSection from '../components/LocationsSection.vue'
 import AddCameraPanel from '../components/AddCameraPanel.vue'
 import CameraSourcesPanel from '../components/CameraSourcesPanel.vue'
 import DevicesSection from '../components/DevicesSection.vue'
@@ -22,7 +23,7 @@ const router = useRouter()
 const isAdmin = computed(() => auth.user?.role === 'admin')
 
 // --- cameras ---
-type Draft = Pick<Camera, 'name' | 'record_enabled' | 'record_stream' | 'retention_days' | 'snapshot_enabled' | 'timelapse_enabled' | 'detect_enabled'>
+type Draft = Pick<Camera, 'name' | 'record_enabled' | 'record_stream' | 'retention_days' | 'snapshot_enabled' | 'timelapse_enabled' | 'detect_enabled' | 'location_id'>
 const drafts = reactive<Record<number, Draft>>({})
 const saving = ref<number | null>(null)
 const syncing = ref(false)
@@ -45,6 +46,7 @@ function draftFor(c: Camera): Draft {
       snapshot_enabled: c.snapshot_enabled,
       timelapse_enabled: c.timelapse_enabled,
       detect_enabled: c.detect_enabled,
+      location_id: c.location_id,
     }
   }
   return drafts[c.id]!
@@ -64,6 +66,7 @@ async function saveCamera(c: Camera) {
     const restarts = d.record_enabled !== c.record_enabled || d.record_stream !== c.record_stream || d.snapshot_enabled !== c.snapshot_enabled
     const updated = await api.updateCamera(c.id, { ...d, name: d.name.trim() })
     cams.replace(updated)
+    if (d.location_id !== c.location_id) cams.load()
     delete drafts[c.id]
     toast.ok(`Pengaturan ${updated.name} disimpan.${restarts ? ' Perekam tersambung ulang (rekaman terputus beberapa detik).' : ''}`)
   } catch (e) {
@@ -216,6 +219,12 @@ const input = 'w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm outl
             </div>
             <label class="mb-1 block text-sm font-medium" :for="`name-${c.id}`">Nama tampilan</label>
             <input :id="`name-${c.id}`" v-model="draftFor(c).name" :class="input" maxlength="60" required />
+            <template v-if="cams.locations.length > 1">
+              <label class="mt-3 mb-1 block text-sm font-medium" :for="`loc-${c.id}`">Lokasi</label>
+              <select :id="`loc-${c.id}`" v-model.number="draftFor(c).location_id" :class="input">
+                <option v-for="l in cams.locations" :key="l.id" :value="l.id">{{ l.name }}</option>
+              </select>
+            </template>
 
             <fieldset class="mt-4 space-y-2.5">
               <legend class="sr-only">Opsi</legend>
@@ -334,6 +343,8 @@ const input = 'w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm outl
         </div>
       </form>
     </section>
+
+    <LocationsSection v-if="isAdmin" />
 
     <UsersSection v-if="isAdmin" />
 

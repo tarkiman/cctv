@@ -21,6 +21,8 @@ type Store struct {
 	Recordings *RecordingStore
 	Settings   *SettingStore
 	Events     *EventStore
+	Locations  *LocationStore
+	Access     *AccessStore
 }
 
 func New(db *sqlx.DB) *Store {
@@ -32,6 +34,8 @@ func New(db *sqlx.DB) *Store {
 		Recordings: &RecordingStore{db: db},
 		Settings:   &SettingStore{db: db},
 		Events:     &EventStore{db: db},
+		Locations:  &LocationStore{db: db},
+		Access:     &AccessStore{db: db},
 	}
 }
 

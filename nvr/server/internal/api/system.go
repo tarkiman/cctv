@@ -38,8 +38,16 @@ func (s *Server) systemStats(w http.ResponseWriter, r *http.Request) {
 		OldestAt    *time.Time `json:"oldest_at"`
 		Last24Bytes int64      `json:"last_24h_bytes"`
 	}
+	visible, err := s.visibleIDs(r)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
 	cams := make([]camUsage, 0, len(usage))
 	for _, u := range usage {
+		if visible != nil && !visible[u.CameraID] {
+			continue
+		}
 		cu := camUsage{CameraUsage: u, Last24Bytes: lastDay[u.CameraID]}
 		if u.Oldest > 0 {
 			t := unixTime(u.Oldest)
@@ -116,9 +124,18 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 // stream is the SSE endpoint; it starts with the full camera status so a reconnecting
 // client never shows stale state.
 func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
-	s.Hub.Serve(w, r, func(send func(string, any)) {
+	// Permissions are resolved once per connection; the client reconnects after a change.
+	visible, err := s.visibleIDs(r)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	allow := func(id int64) bool { return visible == nil || visible[id] }
+	s.Hub.Serve(w, r, allow, func(send func(string, any)) {
 		for _, st := range s.Health.All() {
-			send("camera.status", st)
+			if allow(st.CameraID) {
+				send("camera.status", st)
+			}
 		}
 	})
 }

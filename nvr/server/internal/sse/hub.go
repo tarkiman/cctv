@@ -10,8 +10,9 @@ import (
 )
 
 type message struct {
-	event string
-	data  []byte
+	event    string
+	data     []byte
+	cameraID int64 // 0 = not camera specific
 }
 
 type Hub struct {
@@ -28,19 +29,33 @@ func (h *Hub) Publish(event string, v any) {
 	if err != nil {
 		return
 	}
+	h.send(message{event: event, data: data})
+}
+
+// PublishCamera sends an event about one camera; only subscribers allowed to see that
+// camera receive it.
+func (h *Hub) PublishCamera(cameraID int64, event string, v any) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return
+	}
+	h.send(message{event: event, data: data, cameraID: cameraID})
+}
+
+func (h *Hub) send(m message) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for ch := range h.subs {
 		select {
-		case ch <- message{event, data}:
+		case ch <- m:
 		default:
 		}
 	}
 }
 
 // Serve streams events until the client disconnects. hello, if set, is sent first so
-// the client starts from a complete state.
-func (h *Hub) Serve(w http.ResponseWriter, r *http.Request, hello func(send func(event string, v any))) {
+// the client starts from a complete state. allow filters camera events (nil = all).
+func (h *Hub) Serve(w http.ResponseWriter, r *http.Request, allow func(cameraID int64) bool, hello func(send func(event string, v any))) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
@@ -80,6 +95,9 @@ func (h *Hub) Serve(w http.ResponseWriter, r *http.Request, hello func(send func
 		case <-r.Context().Done():
 			return
 		case m := <-ch:
+			if m.cameraID != 0 && allow != nil && !allow(m.cameraID) {
+				continue
+			}
 			write(m.event, m.data)
 			flusher.Flush()
 		case <-ping.C:

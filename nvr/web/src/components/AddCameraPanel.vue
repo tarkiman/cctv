@@ -4,12 +4,14 @@ import { computed, reactive, ref, watch } from 'vue'
 import { LoaderCircle } from 'lucide-vue-next'
 import { api, ApiError } from '../api/client'
 import type { Camera, SourceInput } from '../api/types'
+import { useCameras } from '../stores/cameras'
 import SourceFields from './SourceFields.vue'
 import RtspHints from './RtspHints.vue'
 
 const emit = defineEmits<{ added: [cam: Camera]; cancel: [] }>()
 
-const form = reactive({ name: '', slug: '', slugTouched: false, withSub: false })
+const cams = useCameras()
+const form = reactive({ name: '', slug: '', slugTouched: false, withSub: false, location: cams.locations[0]?.id ?? 0 })
 const main = ref<SourceInput>({ url: '', username: '', password: '' })
 const sub = ref<SourceInput>({ url: '', username: '', password: '' })
 const busy = ref(false)
@@ -45,7 +47,7 @@ async function submit() {
   if (!slugOk.value) return (error.value = 'ID kamera tidak valid.')
   busy.value = true
   try {
-    const cam = await api.createCamera(form.slug, form.name, main.value, form.withSub && sub.value.url ? sub.value : null)
+    const cam = await api.createCamera(form.slug, form.name, main.value, form.withSub && sub.value.url ? sub.value : null, form.location)
     emit('added', cam)
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : 'Gagal menambah kamera.'
@@ -80,6 +82,12 @@ const input = 'w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm outl
           @input="form.slugTouched = true"
         />
         <p id="nc-slug-hint" class="mt-1 text-xs text-muted">Dipakai di go2rtc dan nama folder rekaman; tidak bisa diubah nanti.</p>
+      </div>
+      <div v-if="cams.locations.length > 1">
+        <label class="mb-1 block text-sm font-medium" for="nc-loc">Lokasi</label>
+        <select id="nc-loc" v-model.number="form.location" :class="input">
+          <option v-for="l in cams.locations" :key="l.id" :value="l.id">{{ l.name }}</option>
+        </select>
       </div>
     </div>
 

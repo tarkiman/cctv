@@ -75,12 +75,17 @@ func (s *Server) putCameraSources(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) createCamera(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Slug string `json:"slug"`
-		Name string `json:"name"`
+		Slug       string `json:"slug"`
+		Name       string `json:"name"`
+		LocationID int64  `json:"location_id"`
 		sourcesRequest
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_body", "Format permintaan tidak valid.")
+		return
+	}
+	if req.LocationID != 0 && !s.Store.Locations.Exists(r.Context(), req.LocationID) {
+		writeError(w, http.StatusBadRequest, "invalid_location", "Lokasi tidak ditemukan.")
 		return
 	}
 	main, sub, ok := s.resolveSources(w, r, nil, req.sourcesRequest)
@@ -99,6 +104,13 @@ func (s *Server) createCamera(w http.ResponseWriter, r *http.Request) {
 		s.Log.Error("add camera", "slug", req.Slug, "err", err)
 		writeError(w, http.StatusBadGateway, "go2rtc_error", "Kamera gagal ditambahkan ke go2rtc.")
 		return
+	}
+	if req.LocationID != 0 && req.LocationID != cam.LocationID.Int64 {
+		cam.LocationID.Int64, cam.LocationID.Valid = req.LocationID, true
+		if err := s.Store.Cameras.Update(r.Context(), cam); err != nil {
+			s.internalError(w, r, err)
+			return
+		}
 	}
 	writeJSON(w, http.StatusCreated, s.cameraDTO(r, cam))
 }
