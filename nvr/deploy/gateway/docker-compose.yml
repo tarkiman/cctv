@@ -1,0 +1,12 @@
+# Location gateway ("pipit"): a go2rtc relay at a remote site. It pulls the site's cameras
+# on the local network (RTSP, Xiaomi P2P, ...) and re-serves them over RTSP, with a
+# password, to the central NVR (umma) through ZeroTier. Nothing is recorded here.
+services:
+  go2rtc:
+    image: alexxit/go2rtc:1.9.14
+    container_name: gateway-go2rtc
+    restart: unless-stopped
+    network_mode: host            # Xiaomi P2P needs it; RTSP is served on the host's ports
+    dns: [192.168.1.1]            # adjust to the site's router if public DNS over UDP is blocked
+    volumes:
+      - ./config:/config          # go2rtc.yaml (mode 600: contains camera and RTSP passwords)

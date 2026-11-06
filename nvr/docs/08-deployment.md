@@ -59,6 +59,40 @@ ssh umma 'cd ~/cctv-nvr/nvr/deploy && docker compose up -d nvrd'
 hanya WebRTC (`:8557`) yang terbuka. Dashboard go2rtc (login ulang Xiaomi) lewat tunnel:
 `ssh -L 1984:127.0.0.1:1984 tarkiman@192.168.1.20` → `http://localhost:1984/add.html`.
 
+## Gerbang lokasi (go2rtc relay, mis. `pipit`)
+
+Kamera di lokasi lain tetap **direkam terpusat di `umma`**. Di lokasi itu dipasang satu STB
+gerbang yang menjalankan go2rtc (`nvr/deploy/gateway/`): ia menarik kamera di LAN lokasi
+tersebut (RTSP, Xiaomi P2P) dan menyajikannya ulang lewat RTSP **berpassword** ke `umma`
+melalui ZeroTier. Keuntungan dibanding routing subnet: tidak masalah bila subnet LAN sama
+(`192.168.1.x`), kamera Xiaomi tetap jalan, dan hanya satu stream per kamera yang keluar
+dari lokasi.
+
+```bash
+# di gerbang (Docker terpasang, sudah join jaringan ZeroTier)
+mkdir -p ~/nvr-gateway/config && cd ~/nvr-gateway
+cp <repo>/nvr/deploy/gateway/docker-compose.yml .
+cp <repo>/nvr/deploy/gateway/go2rtc.example.yaml config/go2rtc.yaml
+chmod 700 config && chmod 600 config/go2rtc.yaml   # isi streams + ganti password RTSP
+docker compose up -d
+```
+
+Di NVR: **Pengaturan → Kamera → Tambah kamera**, URL
+`rtsp://<IP-ZeroTier-gerbang>:8554/<nama-stream>`, username `nvr` + password RTSP gerbang,
+lalu **Tes koneksi**.
+
+| Gerbang | Lokasi | ZeroTier | Catatan |
+|---|---|---|---|
+| `pipit` (`tarkiman@192.168.1.25`, ZTE B860H, WiFi) | sementara masih di rumah (uji 2026-11-06) | `172.22.195.55` | `~/nvr-gateway`; root eMMC 6,5 GB hampir penuh (474 MB sisa) — jangan merekam di sini, bersihkan image/log yang tidak perlu |
+
+Hasil uji 2026-11-06 (`cam1` lewat `pipit`): ZeroTier langsung (RTT min 4 ms; WiFi
+membuat rata-rata ~40 ms), upload **~400 kbps** untuk H.264 720p, go2rtc gerbang 2,5% CPU /
+6,5 MB. Tanpa password ditolak `401`.
+
+Hal yang dicek saat gerbang pindah lokasi: jalur ZeroTier tetap *direct* (bukan relay),
+upload internet lokasi ≥ 1,5× total bitrate kamera, dan notifikasi bila gerbang tidak
+terjangkau. Rekaman lokasi itu terputus selama internetnya putus (kelemahan pola terpusat).
+
 ## Deploy pertama (host baru)
 
 ```bash

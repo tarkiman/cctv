@@ -1,0 +1,19 @@
+# Copy to ./config/go2rtc.yaml (chmod 600) and fill in the site's cameras.
+api:
+  listen: "127.0.0.1:1984"        # dashboard only via SSH tunnel: ssh -L 1984:127.0.0.1:1984 <gateway>
+
+rtsp:
+  listen: ":8554"
+  # Required: every consumer (the NVR) must log in. Use a long random password and put
+  # the same credentials in the NVR camera source (Pengaturan → Kamera → Sumber & koneksi).
+  username: "nvr"
+  password: "CHANGE-ME"
+
+webrtc:
+  listen: ""                      # not used; live view goes through the NVR
+
+streams:
+  # name: source on the site's LAN; the NVR then uses rtsp://<gateway-zerotier-ip>:8554/<name>
+  cam1: rtsp://192.168.1.14:8554/unicast
+  # garasi: rtsp://admin:pass@192.168.0.30:554/stream1
+  # garasi_sub: rtsp://admin:pass@192.168.0.30:554/stream2

@@ -164,6 +164,23 @@ Pada frame S7: orang 0,66 dan 0,51, kucing tidak lagi terbaca orang, false posit
 - [ ] CPU total `umma` < 50% rata-rata, RAM tersedia > 600 MB, tidak ada swap habis.
 - [ ] Rekaman tetap tanpa celah saat detektor crash/restart.
 
+## Tahap D — Multi-lokasi (diputuskan 2026-11-06)
+
+Pengguna punya CCTV di lokasi lain. Keputusan: **semua direkam terpusat di `umma`**; tiap
+lokasi punya STB gerbang (go2rtc relay lewat ZeroTier) — lihat
+[08 — Gerbang lokasi](08-deployment.md#gerbang-lokasi-go2rtc-relay-mis-pipit).
+
+- [x] Gerbang `pipit` terpasang; `cam1` disimulasikan lewat `pipit` (masih satu jaringan).
+- [ ] **Lokasi** sebagai grup kamera (1 kamera = 1 lokasi); kamera yang ada → "Rumah".
+- [ ] Akses user per lokasi (otomatis mencakup kamera baru) + pengecualian per kamera;
+      admin melihat semua. Ditegakkan di semua jalur: daftar, live, snapshot, rekaman, export,
+      timelapse, event, SSE, Status.
+- [ ] Tab per lokasi di Live; filter lokasi di Rekaman/Status.
+- [ ] Notifikasi tingkat lokasi: "📡 Lokasi X tidak terjangkau (n kamera)" menggantikan n alert
+      kamera; webhook per lokasi (opsional).
+- [ ] Saat `pipit` dipindah: cek ZeroTier *direct*, upload internet, lalu tambah kamera lokasi itu.
+- [ ] Nanti (opsional): buffer lokal di gerbang untuk mengisi celah saat internet lokasi putus.
+
 ## Tahap C — Backlog (belum dijadwalkan)
 
 Urut kira-kira dari manfaat terbesar:

@@ -21,6 +21,7 @@ git. Sumber stream (termasuk kredensial) tersimpan di `go2rtc.yaml` NVR Lite di 
 | Akses SSH/root | `root` / `ismart12` (default firmware, lihat README proyek Dafang-hacks) |
 | Web UI | `http://192.168.1.14` (port 80) |
 | RTSP | `rtsp://192.168.1.14:8554/unicast` — **tanpa auth** |
+| Jalur di NVR | Sejak 2026-11-06 (uji gerbang lokasi) NVR menarik `cam1` **lewat `pipit`**: `rtsp://172.22.195.55:8554/cam1` (user `nvr`, password RTSP gerbang). Kembalikan ke `rtsp://192.168.1.14:8554/unicast` lewat *Sumber & koneksi* bila pipit dicabut. |
 | Video | H.264, 1280x720, 25 fps, audio MP3 |
 | Catatan | **IP sudah 3x berubah dalam beberapa hari** (`.12`→`.13`→`.14`) meski tercatat "statis" -- kemungkinan sebenarnya masih DHCP biasa (bukan reservation) di router, worth dicek/diperbaiki di sisi router supaya tidak perlu update config manual tiap kali berubah. Cara ganti IP: **Pengaturan → Kamera → cam1 → Sumber & koneksi**, ganti IP, *Tes koneksi*, lalu *Simpan sumber* (perekam tersambung ulang sendiri). Kalau kamera cuma mati/nyala tanpa ganti IP, perekam reconnect otomatis. Cara dapat RTSP URL: aktifkan RTSP lewat web UI kamera, defaultnya di path `/unicast` port `8554`. |
 
