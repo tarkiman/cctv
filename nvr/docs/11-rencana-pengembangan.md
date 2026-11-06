@@ -120,8 +120,17 @@ Keputusan arsitektur: [D12](10-keputusan.md#d12-deteksi-bisa-diatur-per-kamera-m
       luas 15‰.
 - [x] Mengubah saklar deteksi kini hanya me-restart worker detektor (grup worker terpisah);
       ganti nama/retensi/timelapse tidak me-restart apa pun.
-- [ ] **S8**: jalankan di `bardi` semalam, hitung event per jam dan cocokkan sampel dengan
-      rekaman (serangga di lampu IR? PTZ melacak apa?).
+- [x] **S8** (5 Nov 13:26 → 6 Nov 17:36 WIB, `bardi`, 2 fps / ambang 25 / luas 15‰):
+      **1.020 event**; siang 30–70/jam (aktif 1–7 menit/jam), malam 23:00–05:00 **nol event**
+      (tidak ada masalah serangga IR). 91% event berupa perubahan gambar total (median luas
+      0,68) karena PTZ mengikuti gerakan; durasi median 1 dtk, p90 10 dtk. Sampel rekaman:
+      orang beraktivitas di halaman, motor lewat di jalan (PTZ ikut berputar), dan PTZ kembali
+      ke posisi awal tanpa objek. Detektor restart berkelompok saat kamera `bardi` sendiri
+      putus (RTSP 404), pulih otomatis.
+      **Kesimpulan:** motion gate bekerja dan murah; ambang default dipertahankan. Untuk B2:
+      (1) orang/motor **di jalan** akan terdeteksi sebagai orang → perlu filter ukuran kotak
+      minimum (zona tidak bisa di PTZ) + cooldown notifikasi; (2) beban AI di jam tersibuk
+      ≈ 430 dtk aktif × 1,5 frame/dtk ≈ 7% satu core rata-rata per jam — aman.
 
 ### B2. Deteksi orang
 
