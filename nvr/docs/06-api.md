@@ -72,6 +72,7 @@ Contoh `GET /cameras`:
     "has_sub_stream": true,
     "codec": "hevc",
     "record_enabled": true,
+    "record_audio": true,
     "detect_enabled": true,
     "status": {
       "state": "running",
@@ -82,6 +83,11 @@ Contoh `GET /cameras`:
   }
 ]
 ```
+
+`status.audio` (suara di rekaman): `on` (direkam), `none` (kamera tidak mengirim suara),
+`unavailable` (audio kamera tidak bisa dibaca, merekam video saja), `off` (dimatikan);
+tidak ada sampai segmen pertama. `PATCH /cameras/{id}` menerima `record_audio`
+(perekam tersambung ulang).
 
 `state`: `starting | running | degraded | offline | disabled`. `message` berisi kalimat
 yang bisa ditindaklanjuti, mis. "Sesi Xiaomi kemungkinan kedaluwarsa — login ulang di

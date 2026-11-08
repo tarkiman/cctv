@@ -21,6 +21,7 @@ type cameraDTO struct {
 	Height             int64               `json:"height,omitempty"`
 	RecordEnabled      bool                `json:"record_enabled"`
 	RecordStream       string              `json:"record_stream"`
+	RecordAudio        bool                `json:"record_audio"`
 	RetentionDays      int                 `json:"retention_days"`
 	EventRetentionDays int                 `json:"event_retention_days"`
 	SnapshotEnabled    bool                `json:"snapshot_enabled"`
@@ -34,7 +35,7 @@ type cameraDTO struct {
 func (s *Server) cameraDTO(r *http.Request, c *store.Camera) cameraDTO {
 	d := cameraDTO{
 		ID: c.ID, Slug: c.Slug, Name: c.Name, HasSubStream: c.SubStream.Valid,
-		RecordEnabled: c.RecordEnabled, RecordStream: c.RecordStream,
+		RecordEnabled: c.RecordEnabled, RecordStream: c.RecordStream, RecordAudio: c.RecordAudio,
 		RetentionDays: c.RetentionDays, EventRetentionDays: c.EventRetentionDays,
 		SnapshotEnabled: c.SnapshotEnabled, TimelapseEnabled: c.TimelapseEnabled,
 		DetectEnabled: c.DetectEnabled, SortOrder: c.SortOrder, LocationID: c.LocationID.Int64,
@@ -77,6 +78,7 @@ func (s *Server) patchCamera(w http.ResponseWriter, r *http.Request) {
 		Name               *string `json:"name"`
 		RecordEnabled      *bool   `json:"record_enabled"`
 		RecordStream       *string `json:"record_stream"`
+		RecordAudio        *bool   `json:"record_audio"`
 		RetentionDays      *int    `json:"retention_days"`
 		EventRetentionDays *int    `json:"event_retention_days"`
 		SnapshotEnabled    *bool   `json:"snapshot_enabled"`
@@ -124,6 +126,9 @@ func (s *Server) patchCamera(w http.ResponseWriter, r *http.Request) {
 	if req.RecordEnabled != nil {
 		cam.RecordEnabled = *req.RecordEnabled
 	}
+	if req.RecordAudio != nil {
+		cam.RecordAudio = *req.RecordAudio
+	}
 	if req.SnapshotEnabled != nil {
 		cam.SnapshotEnabled = *req.SnapshotEnabled
 	}
@@ -151,7 +156,7 @@ func (s *Server) patchCamera(w http.ResponseWriter, r *http.Request) {
 	// rename or sort change restarts nothing. Restarts can take a few seconds (the
 	// recorder closes its segment first), so they happen in the background.
 	recorderChanged := before.RecordEnabled != cam.RecordEnabled || before.RecordStream != cam.RecordStream ||
-		before.SnapshotEnabled != cam.SnapshotEnabled
+		before.RecordAudio != cam.RecordAudio || before.SnapshotEnabled != cam.SnapshotEnabled
 	detectChanged := before.DetectEnabled != cam.DetectEnabled
 	go func(id int64) {
 		var err error

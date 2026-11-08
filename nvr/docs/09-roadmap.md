@@ -62,7 +62,10 @@ Kriteria selesai:
 ## Nanti (belum dijadwalkan)
 
 - Zona sederhana (poligon) untuk deteksi.
-- Rekam audio (AAC) per kamera.
+- ~~Rekam audio (AAC) per kamera.~~ Selesai 2026-11-09 (D14).
+- Bicara balik (two-way audio) ke kamera yang punya speaker (`c301` lewat go2rtc WebRTC
+  dengan mikrofon browser); cek dukungan `bardi`.
+- Audio live `cam1`: MP2 dari kamera rusak; perlu cek pengaturan audio di firmware kamera.
 - Integrasi MQTT/Home Assistant.
 - 2FA (TOTP).
 - Memindahkan inferensi ke mesin lain lewat HTTP bila `umma` kurang kuat.

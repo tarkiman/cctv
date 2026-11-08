@@ -120,3 +120,23 @@ dibatalkan tidak dihapus, cukup ditandai **Diganti oleh Dn**.
 - **Konsekuensi:** perubahan izin berlaku pada request berikutnya; koneksi SSE yang sudah
   terbuka memakai izin saat tersambung sampai tersambung ulang. Notifikasi Discord masih
   satu channel untuk semua (webhook per lokasi bisa ditambahkan).
+
+## D14. Suara direkam sebagai AAC, dengan jalan mundur ke video saja
+- **Konteks:** pengguna ingin rekaman bersuara (2026-11-09). Ketiga kamera mengirim audio
+  berbeda: `bardi` G.711 A-law 8 kHz, `c301` Opus 48 kHz (timestamp-nya dari go2rtc maju
+  ±0,06× kecepatan nyata), `cam1` MP2 yang tidak bisa di-decode sama sekali (ffmpeg
+  berhenti "Decode error rate", sehingga video pun tidak terekam).
+- **Keputusan:** `record_audio` per kamera, **nyala secara default**. Audio selalu
+  di-transcode ke AAC 16 kHz mono 32 kbps (±350 MB/kamera/hari); video tetap stream copy.
+  Sumber Xiaomi memakai timestamp waktu kedatangan untuk audio dan video sekaligus,
+  supaya sinkron dan tidak bergeser seiring waktu. Audio yang tidak terbaca membuat
+  perekam lanjut tanpa suara (status `unavailable`) sampai pengaturan kamera diubah
+  atau nvrd dimulai ulang; percobaan yang gagal memakan ±1 menit rekaman (ffmpeg
+  memeriksa stream audio rusak selama itu), jadi tidak diulang berkala. Timeout tanpa
+  error audio (sumber lambat) hanya memblokir audio 1 jam.
+- **Alternatif ditolak:** copy audio apa adanya (G.711/MP2 tidak valid atau tidak bisa
+  diputar di MP4 browser); transcode di go2rtc (`ffmpeg:` source) — timestamp tetap rusak
+  dan menambah proses per kamera; `asetpts=N/SR/TB` untuk Xiaomi — benar di awal tetapi
+  bergeser bila ada paket hilang.
+- **Konsekuensi:** satu encoder AAC per kamera (beban kecil; diukur di `umma`). Live dan
+  rekaman mulai bisu (aturan autoplay browser) dengan tombol suara. Bicara balik belum.

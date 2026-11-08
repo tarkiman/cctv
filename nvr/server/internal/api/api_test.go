@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/tarkiman/cctv/nvr/server/internal/auth"
+	"github.com/tarkiman/cctv/nvr/server/internal/camera"
 	"github.com/tarkiman/cctv/nvr/server/internal/config"
 	"github.com/tarkiman/cctv/nvr/server/internal/db"
 	"github.com/tarkiman/cctv/nvr/server/internal/go2rtc"
@@ -52,11 +53,15 @@ func newEnv(t *testing.T) *env {
 	}
 	loc, _ := time.LoadLocation("Asia/Jakarta")
 	hub := sse.NewHub()
+	tracker := health.New(hub)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := &Server{
 		Config: &config.Config{DataDir: dir, Location: loc},
-		Store:  st, Auth: a, Go2rtc: go2rtc.New("http://127.0.0.1:1"), Health: health.New(hub),
-		Hub: hub, Sys: &sysinfo.Sampler{}, Web: fstest.MapFS{"index.html": {Data: []byte("<html>app</html>")}},
-		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Store:  st, Auth: a, Go2rtc: go2rtc.New("http://127.0.0.1:1"), Health: tracker,
+		// Not started: reloads after a settings change are no-ops.
+		Cameras: &camera.Manager{Store: st, Health: tracker, Log: logger},
+		Hub:     hub, Sys: &sysinfo.Sampler{}, Web: fstest.MapFS{"index.html": {Data: []byte("<html>app</html>")}},
+		Log: logger,
 	}
 	ts := httptest.NewServer(s.Routes())
 	t.Cleanup(ts.Close)
@@ -145,6 +150,22 @@ func TestCamerasAndTimeline(t *testing.T) {
 	}
 	if r := e.do(t, "PATCH", "/api/v1/cameras/1", `{"record_stream":"sub"}`, true); r.StatusCode != http.StatusBadRequest {
 		t.Fatalf("sub record stream without sub-stream accepted: %d", r.StatusCode)
+	}
+
+	// Audio is recorded by default and can be switched off per camera.
+	for _, want := range []bool{true, false} {
+		var cam struct {
+			RecordAudio bool `json:"record_audio"`
+		}
+		r := e.do(t, "GET", "/api/v1/cameras/1", "", false)
+		if err := json.NewDecoder(r.Body).Decode(&cam); err != nil || cam.RecordAudio != want {
+			t.Fatalf("record_audio = %v (%v), want %v", cam.RecordAudio, err, want)
+		}
+		if want {
+			if r := e.do(t, "PATCH", "/api/v1/cameras/1", `{"record_audio":false}`, true); r.StatusCode != 200 {
+				t.Fatalf("switch audio off: %d", r.StatusCode)
+			}
+		}
 	}
 }
 

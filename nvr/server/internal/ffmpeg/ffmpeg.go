@@ -110,20 +110,23 @@ type Probe struct {
 	Width    int64
 	Height   int64
 	Duration float64
+	Audio    string // codec of the first audio stream, "" when there is none
 }
 
-// ProbeFile reads codec, size and duration of the first video stream of a file.
+// ProbeFile reads codec, size and duration of the first video stream of a file, and the
+// codec of its first audio stream.
 func (t Tools) ProbeFile(ctx context.Context, path string) (*Probe, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, t.FFprobe, "-v", "error", "-select_streams", "v:0",
-		"-show_entries", "stream=codec_name,width,height:format=duration",
+	out, err := exec.CommandContext(ctx, t.FFprobe, "-v", "error",
+		"-show_entries", "stream=codec_type,codec_name,width,height:format=duration",
 		"-of", "json", path).Output()
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe %s: %w", path, err)
 	}
 	var res struct {
 		Streams []struct {
+			CodecType string `json:"codec_type"`
 			CodecName string `json:"codec_name"`
 			Width     int64  `json:"width"`
 			Height    int64  `json:"height"`
@@ -135,10 +138,18 @@ func (t Tools) ProbeFile(ctx context.Context, path string) (*Probe, error) {
 	if err := json.Unmarshal(out, &res); err != nil {
 		return nil, err
 	}
-	if len(res.Streams) == 0 {
+	p := &Probe{}
+	for _, st := range res.Streams {
+		switch {
+		case st.CodecType == "video" && p.Codec == "":
+			p.Codec, p.Width, p.Height = st.CodecName, st.Width, st.Height
+		case st.CodecType == "audio" && p.Audio == "":
+			p.Audio = st.CodecName
+		}
+	}
+	if p.Codec == "" {
 		return nil, errors.New("no video stream")
 	}
-	p := &Probe{Codec: res.Streams[0].CodecName, Width: res.Streams[0].Width, Height: res.Streams[0].Height}
 	p.Duration, _ = strconv.ParseFloat(res.Format.Duration, 64)
 	return p, nil
 }

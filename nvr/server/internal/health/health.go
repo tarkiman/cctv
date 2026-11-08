@@ -25,6 +25,10 @@ type CameraStatus struct {
 	DetectError  string     `json:"detect_error,omitempty"`
 	Motion       bool       `json:"motion"`
 	LastMotionAt *time.Time `json:"last_motion_at"`
+	// Audio in the recordings: "on" (sound recorded), "none" (the camera sends no sound),
+	// "unavailable" (its sound can't be read, recording video only), "off" (switched
+	// off), or "" until the first segment tells.
+	Audio string `json:"audio,omitempty"`
 }
 
 type camera struct {
@@ -66,6 +70,26 @@ func (t *Tracker) SetXiaomi(id int64, xiaomi bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.get(id).xiaomi = xiaomi
+}
+
+// Xiaomi reports whether the camera's source is Xiaomi P2P (known after the first Sync).
+func (t *Tracker) Xiaomi(id int64) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.get(id).xiaomi
+}
+
+// SetAudio records the audio state of the camera's recordings.
+func (t *Tracker) SetAudio(id int64, audio string) {
+	t.mu.Lock()
+	c := t.get(id)
+	changed := c.status.Audio != audio
+	c.status.Audio = audio
+	snap := c.status
+	t.mu.Unlock()
+	if changed {
+		t.hub.PublishCamera(snap.CameraID, "camera.status", snap)
+	}
 }
 
 // SetState records a worker state; when it changes, browsers are notified.

@@ -15,6 +15,8 @@ import {
   RotateCw,
   TriangleAlert,
   VideoOff,
+  Volume2,
+  VolumeX,
 } from 'lucide-vue-next'
 import { api } from '../api/client'
 import type { CameraEvent, Recording, Timeline as TimelineData } from '../api/types'
@@ -53,6 +55,10 @@ const playing = ref(false)
 const segment = ref<Recording | null>(null)
 const rate = ref(1)
 const showKeys = ref(false)
+// Sound starts muted (browsers block autoplay with sound); one click turns it on for
+// live and recordings alike.
+const muted = ref(true)
+const liveAudio = ref(false)
 const exportSel = ref<{ start: Date; end: Date } | null>(null)
 const today = computed(() => wibDate(new Date(now.value)))
 const dayStart = computed(() => wibMidnight(date.value))
@@ -162,6 +168,7 @@ useHotkeys({
   l: () => setMode('live'),
   r: () => setMode('rekaman'),
   f: fullscreen,
+  m: () => (muted.value = !muted.value),
   '?': () => (showKeys.value = !showKeys.value),
 })
 
@@ -222,7 +229,14 @@ onMounted(() => {
       <section class="min-w-0">
         <div ref="videoBox" class="relative aspect-video overflow-hidden rounded-[var(--radius-card)] bg-[var(--video-bg)]" @dblclick="fullscreen">
           <template v-if="mode === 'live'">
-            <LivePlayer v-if="liveCodecOk" :camera-id="cam.id" :quality="quality" @state="liveState = $event">
+            <LivePlayer
+              v-if="liveCodecOk"
+              :camera-id="cam.id"
+              :quality="quality"
+              :muted="muted"
+              @state="liveState = $event"
+              @audio="liveAudio = $event"
+            >
               <template #default="{ state, error }">
                 <div v-if="state === 'connecting'" class="absolute inset-0 grid place-items-center">
                   <div class="size-10 animate-spin rounded-full border-4 border-white/20 border-t-white" role="status" aria-label="Menghubungkan" />
@@ -245,6 +259,18 @@ onMounted(() => {
             <span class="absolute top-3 left-3 flex items-center gap-1.5 rounded bg-red-600 px-2 py-0.5 text-xs font-bold text-white">
               <Radio class="size-3.5" aria-hidden="true" /> LIVE
             </span>
+            <button
+              v-if="liveAudio && liveState === 'playing'"
+              type="button"
+              class="absolute top-2 right-2 grid size-10 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80"
+              :aria-label="muted ? 'Nyalakan suara' : 'Matikan suara'"
+              :aria-pressed="!muted"
+              :title="muted ? 'Nyalakan suara (M)' : 'Matikan suara (M)'"
+              @click="muted = !muted"
+            >
+              <VolumeX v-if="muted" class="size-5" aria-hidden="true" />
+              <Volume2 v-else class="size-5" aria-hidden="true" />
+            </button>
           </template>
 
           <RecordingPlayer
@@ -252,6 +278,7 @@ onMounted(() => {
             ref="player"
             :camera-id="cam.id"
             :rate="rate"
+            :muted="muted"
             @time="playhead = $event"
             @state="playing = $event"
             @segment="segment = $event"
@@ -300,6 +327,17 @@ onMounted(() => {
             </div>
 
             <div class="flex items-center gap-1">
+              <button
+                type="button"
+                class="grid size-10 place-items-center rounded-lg hover:bg-surface-2"
+                :aria-label="muted ? 'Nyalakan suara' : 'Matikan suara'"
+                :aria-pressed="!muted"
+                :title="muted ? 'Nyalakan suara (M)' : 'Matikan suara (M)'"
+                @click="muted = !muted"
+              >
+                <VolumeX v-if="muted" class="size-5" aria-hidden="true" />
+                <Volume2 v-else class="size-5" aria-hidden="true" />
+              </button>
               <select v-model.number="rate" class="min-h-10 rounded-lg border border-line bg-surface px-2 text-sm font-semibold" aria-label="Kecepatan putar">
                 <option v-for="r in rates" :key="r" :value="r">{{ r }}×</option>
               </select>
@@ -341,6 +379,16 @@ onMounted(() => {
               <span v-else-if="cam.status.detect === 'error'" class="text-danger" :title="cam.status.detect_error">Bermasalah</span>
               <span v-else-if="cam.status.motion" class="font-semibold text-amber-500">Ada gerak sekarang</span>
               <span v-else>Aktif<template v-if="cam.status.last_motion_at"> · gerak {{ fmtRelative(cam.status.last_motion_at, now) }}</template></span>
+            </dd>
+            <dt class="text-muted">Suara</dt>
+            <dd>
+              <span v-if="!cam.record_audio || cam.status.audio === 'off'" class="text-muted">Tidak direkam</span>
+              <span v-else-if="cam.status.audio === 'on'">Direkam</span>
+              <span v-else-if="cam.status.audio === 'none'" class="text-muted">Kamera tidak mengirim suara</span>
+              <span v-else-if="cam.status.audio === 'unavailable'" class="text-warn" title="Format audio kamera tidak bisa dibaca; video tetap direkam.">
+                Tidak bisa dibaca
+              </span>
+              <span v-else class="text-muted">Menunggu segmen pertama</span>
             </dd>
             <dt class="text-muted">Retensi</dt>
             <dd>{{ cam.record_enabled ? `${cam.retention_days} hari` : 'Tidak merekam' }}</dd>
@@ -395,6 +443,7 @@ onMounted(() => {
             <dt><kbd>[ ]</kbd></dt><dd>Kecepatan</dd>
             <dt><kbd>L / R</kbd></dt><dd>Live / Rekaman</dd>
             <dt><kbd>F</kbd></dt><dd>Layar penuh</dd>
+            <dt><kbd>M</kbd></dt><dd>Suara nyala / mati</dd>
           </dl>
         </div>
       </aside>
