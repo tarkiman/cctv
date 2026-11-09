@@ -7,7 +7,7 @@ import { api, ApiError } from '../api/client'
 import type { Recording } from '../api/types'
 import { canPlayCodec } from '../composables/media'
 
-const props = defineProps<{ cameraId: number; rate: number }>()
+const props = withDefaults(defineProps<{ cameraId: number; rate: number; muted?: boolean }>(), { muted: true })
 const emit = defineEmits<{ time: [t: Date | null]; state: [playing: boolean]; segment: [rec: Recording | null] }>()
 
 type Slot = { el: HTMLVideoElement | null; rec: Recording | null }
@@ -168,7 +168,7 @@ defineExpose({ playAt, toggle, skip, step, playing, current: cur })
       :ref="(el) => (s.el = el as HTMLVideoElement | null)"
       class="absolute inset-0 h-full w-full object-contain"
       :class="i === active ? 'visible' : 'invisible'"
-      muted
+      :muted="muted || i !== active"
       playsinline
       preload="auto"
       :aria-hidden="i !== active"

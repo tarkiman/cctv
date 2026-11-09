@@ -170,6 +170,9 @@ func (m *Manager) Reload(ctx context.Context, id int64) error {
 	// writing into the same .incoming folder.
 	m.stop(m.workers, id)
 	m.stop(m.detects, id)
+	if m.Recorder != nil {
+		m.Recorder.ResetAudio(id) // settings changed: try the camera's audio again
+	}
 	m.start(*cam)
 	return nil
 }

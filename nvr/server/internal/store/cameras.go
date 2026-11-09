@@ -16,6 +16,7 @@ type Camera struct {
 	SourceManaged      bool           `db:"source_managed"`
 	RecordEnabled      bool           `db:"record_enabled"`
 	RecordStream       string         `db:"record_stream"`
+	RecordAudio        bool           `db:"record_audio"`
 	RetentionDays      int            `db:"retention_days"`
 	EventRetentionDays int            `db:"event_retention_days"`
 	SnapshotEnabled    bool           `db:"snapshot_enabled"`
@@ -48,7 +49,7 @@ func (c *Camera) StreamFor(quality string) string {
 type CameraStore struct{ db *sqlx.DB }
 
 const cameraCols = `id, slug, name, main_stream, sub_stream, source_managed, record_enabled,
-	record_stream, retention_days, event_retention_days, snapshot_enabled, timelapse_enabled,
+	record_stream, record_audio, retention_days, event_retention_days, snapshot_enabled, timelapse_enabled,
 	detect_enabled, sort_order, location_id, mac, created_at, updated_at`
 
 func (s *CameraStore) List(ctx context.Context) ([]Camera, error) {
@@ -94,11 +95,11 @@ func (s *CameraStore) SetSubStream(ctx context.Context, id int64, sub sql.NullSt
 // Update writes the user-editable fields of c.
 func (s *CameraStore) Update(ctx context.Context, c *Camera) error {
 	_, err := s.db.ExecContext(ctx, `
-		UPDATE cameras SET name = ?, record_enabled = ?, record_stream = ?, retention_days = ?,
+		UPDATE cameras SET name = ?, record_enabled = ?, record_stream = ?, record_audio = ?, retention_days = ?,
 			event_retention_days = ?, snapshot_enabled = ?, timelapse_enabled = ?, detect_enabled = ?,
 			sort_order = ?, location_id = ?, updated_at = ?
 		WHERE id = ?`,
-		c.Name, c.RecordEnabled, c.RecordStream, c.RetentionDays, c.EventRetentionDays,
+		c.Name, c.RecordEnabled, c.RecordStream, c.RecordAudio, c.RetentionDays, c.EventRetentionDays,
 		c.SnapshotEnabled, c.TimelapseEnabled, c.DetectEnabled, c.SortOrder, c.LocationID, now(), c.ID)
 	return err
 }

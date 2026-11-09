@@ -73,8 +73,18 @@ Kenapa MPEG-TS dulu: segmen yang sedang ditulis tetap bisa dibaca walau proses m
 mendadak (MP4 baru valid setelah ditutup). Kenapa diubah ke MP4: browser memutar dan
 melompat dalam MP4 `faststart` jauh lebih baik. Lihat [keputusan D6](10-keputusan.md).
 
-Audio tidak direkam di fase 1: `bardi` memakai `pcm_alaw` yang tidak valid di MP4, dan
-transcode ke AAC menambah decode. Bisa diaktifkan per kamera nanti.
+Audio (sejak 2026-11-09, [D14](10-keputusan.md)): video tetap `-c:v copy`, audio diubah
+ke AAC 16 kHz mono 32 kbps (`-map 0:a:0? -af aresample=async=1 -c:a aac`). Kamera
+mengirim G.711 (`bardi`), Opus (`c301`) atau MP2 (`cam1`); hanya AAC yang aman di MP4
+untuk semua browser. Sumber Xiaomi direkam dengan `-use_wallclock_as_timestamps 1`
+karena timestamp audionya dari go2rtc rusak. Kalau audio kamera tidak bisa di-decode
+(ffmpeg tidak menulis segmen dalam 60 dtk, atau berhenti dengan error audio), perekam
+otomatis lanjut **tanpa suara**. Kalau gagalnya disertai error decode audio, audio tidak
+dicoba ulang berkala (satu percobaan gagal memakan ±1 menit rekaman karena ffmpeg lama
+memeriksa stream rusak), hanya saat pengaturan kamera diubah atau nvrd dimulai ulang.
+Kalau hanya timeout tanpa error (mis. koneksi P2P Xiaomi lambat), audio dicoba lagi
+1 jam kemudian. Live: go2rtc sudah mengirim Opus/FLAC lewat MSE; pemutar mulai
+bisu dan punya tombol suara.
 
 ### Snapshot & timelapse
 `ffmpeg -skip_frame nokey -i rtsp://127.0.0.1:8556/<stream> -frames:v 1 -vf scale=-2:480 <file>.jpg`

@@ -14,6 +14,8 @@ export interface CameraStatus {
   detect_error?: string
   motion: boolean
   last_motion_at: string | null
+  /** Sound in the recordings; absent until the first segment with audio on. */
+  audio?: 'on' | 'none' | 'unavailable' | 'off'
 }
 
 export interface Camera {
@@ -26,6 +28,7 @@ export interface Camera {
   height?: number
   record_enabled: boolean
   record_stream: 'main' | 'sub'
+  record_audio: boolean
   retention_days: number
   event_retention_days: number
   snapshot_enabled: boolean

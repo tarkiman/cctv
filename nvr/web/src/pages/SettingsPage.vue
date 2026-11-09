@@ -24,7 +24,7 @@ const router = useRouter()
 const isAdmin = computed(() => auth.user?.role === 'admin')
 
 // --- cameras ---
-type Draft = Pick<Camera, 'name' | 'record_enabled' | 'record_stream' | 'retention_days' | 'snapshot_enabled' | 'timelapse_enabled' | 'detect_enabled' | 'location_id'>
+type Draft = Pick<Camera, 'name' | 'record_enabled' | 'record_stream' | 'record_audio' | 'retention_days' | 'snapshot_enabled' | 'timelapse_enabled' | 'detect_enabled' | 'location_id'>
 const drafts = reactive<Record<number, Draft>>({})
 const saving = ref<number | null>(null)
 const syncing = ref(false)
@@ -51,6 +51,7 @@ function draftFor(c: Camera): Draft {
     drafts[c.id] = {
       name: c.name,
       record_enabled: c.record_enabled,
+      record_audio: c.record_audio,
       record_stream: c.record_stream,
       retention_days: c.retention_days,
       snapshot_enabled: c.snapshot_enabled,
@@ -73,7 +74,11 @@ async function saveCamera(c: Camera) {
   if (!d.name.trim()) return toast.error('Nama kamera wajib diisi.')
   saving.value = c.id
   try {
-    const restarts = d.record_enabled !== c.record_enabled || d.record_stream !== c.record_stream || d.snapshot_enabled !== c.snapshot_enabled
+    const restarts =
+      d.record_enabled !== c.record_enabled ||
+      d.record_stream !== c.record_stream ||
+      d.record_audio !== c.record_audio ||
+      d.snapshot_enabled !== c.snapshot_enabled
     const updated = await api.updateCamera(c.id, { ...d, name: d.name.trim() })
     cams.replace(updated)
     if (d.location_id !== c.location_id) cams.load()
@@ -250,6 +255,23 @@ const input = 'w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm outl
               <label class="flex items-center justify-between gap-3 text-sm">
                 <span>Rekam 24 jam</span>
                 <input v-model="draftFor(c).record_enabled" type="checkbox" class="size-5 accent-[var(--primary)]" />
+              </label>
+              <label class="flex items-start justify-between gap-3 text-sm">
+                <span>
+                  Rekam suara
+                  <span v-if="c.status.audio === 'unavailable'" class="block text-xs text-warn">
+                    Format audio kamera ini tidak bisa dibaca; video tetap direkam tanpa suara. Matikan pilihan ini agar
+                    perekam tidak mencobanya lagi setiap nvrd dimulai ulang.
+                  </span>
+                  <span v-else-if="c.status.audio === 'none'" class="block text-xs text-muted">Kamera ini tidak mengirim suara.</span>
+                  <span v-else class="block text-xs text-muted">Sekitar 350 MB per hari.</span>
+                </span>
+                <input
+                  v-model="draftFor(c).record_audio"
+                  type="checkbox"
+                  class="mt-0.5 size-5 shrink-0 accent-[var(--primary)]"
+                  :disabled="!draftFor(c).record_enabled"
+                />
               </label>
               <label class="flex items-center justify-between gap-3 text-sm">
                 <span>Snapshot per menit</span>

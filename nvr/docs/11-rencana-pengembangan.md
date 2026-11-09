@@ -202,7 +202,8 @@ Urut kira-kira dari manfaat terbesar:
    sub-stream → mahal, pertimbangkan deteksi gerak bawaan kamera atau lewati.
 3. **Live dari luar rumah lebih lancar**: WebRTC lewat TURN/Cloudflare Calls, atau
    tetap MSE (sekarang 1–3 dtk delay, cukup).
-4. **Audio** di rekaman & live (`bardi` pcm_alaw → AAC saat remux).
+4. ~~**Audio** di rekaman & live~~ — selesai 2026-11-09 (D14). Lanjutan: **bicara balik**
+   (two-way audio) ke `c301` lewat WebRTC + mikrofon browser.
 5. **Integrasi Home Assistant / MQTT** (event & status kamera).
 6. **2FA (TOTP)** untuk akun admin.
 7. **Urutkan kamera** (drag & drop di Pengaturan; kolom `sort_order` sudah ada).

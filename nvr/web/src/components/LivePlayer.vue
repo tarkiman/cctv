@@ -6,12 +6,16 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { api } from '../api/client'
 
-const props = withDefaults(defineProps<{ cameraId: number; quality?: 'main' | 'sub'; active?: boolean; fit?: 'contain' | 'cover' }>(), {
-  quality: 'main',
-  active: true,
-  fit: 'contain',
-})
-const emit = defineEmits<{ state: [state: 'connecting' | 'playing' | 'error'] }>()
+const props = withDefaults(
+  defineProps<{ cameraId: number; quality?: 'main' | 'sub'; active?: boolean; fit?: 'contain' | 'cover'; muted?: boolean }>(),
+  {
+    quality: 'main',
+    active: true,
+    fit: 'contain',
+    muted: true,
+  },
+)
+const emit = defineEmits<{ state: [state: 'connecting' | 'playing' | 'error']; audio: [hasAudio: boolean] }>()
 
 const CODECS = ['avc1.640029', 'avc1.64002A', 'avc1.640033', 'hvc1.1.6.L153.B0', 'mp4a.40.2', 'mp4a.40.5', 'flac', 'opus']
 const video = ref<HTMLVideoElement | null>(null)
@@ -35,6 +39,7 @@ function setState(s: typeof state.value, msg = '') {
 
 function start() {
   stop()
+  emit('audio', false)
   stopped = false
   const v = video.value
   const MS = window.ManagedMediaSource ?? window.MediaSource
@@ -69,6 +74,8 @@ function openSocket(MS: typeof MediaSource) {
       if (msg.type === 'mse' && ms) {
         try {
           sb = ms.addSourceBuffer(msg.value)
+          // go2rtc lists the audio codec in the MIME type when it sends sound.
+          emit('audio', /mp4a|opus|flac/.test(msg.value))
           sb.mode = 'segments'
           sb.addEventListener('updateend', flush)
         } catch {
@@ -185,7 +192,7 @@ defineExpose({ video, state, retry: start })
       ref="video"
       class="h-full w-full transition-opacity duration-300"
       :class="[fit === 'cover' ? 'object-cover' : 'object-contain', state === 'playing' ? 'opacity-100' : 'opacity-0']"
-      muted
+      :muted="muted"
       playsinline
       autoplay
       aria-label="Video live"
