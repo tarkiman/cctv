@@ -154,6 +154,23 @@ func (t Tools) ProbeFile(ctx context.Context, path string) (*Probe, error) {
 	return p, nil
 }
 
+// CountVideoPackets counts the frames of the first video stream without decoding.
+func (t Tools) CountVideoPackets(ctx context.Context, path string) (int64, error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, t.FFprobe, "-v", "error", "-select_streams", "v:0", "-count_packets",
+		"-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", path).Output()
+	if err != nil {
+		return 0, fmt.Errorf("ffprobe %s: %w", path, err)
+	}
+	for _, line := range strings.Fields(string(out)) {
+		if n, err := strconv.ParseInt(strings.Trim(line, ","), 10, 64); err == nil {
+			return n, nil
+		}
+	}
+	return 0, errors.New("no packet count")
+}
+
 // MP4Tag is the sample entry tag browsers expect for a codec in MP4 (Safari requires hvc1
 // for HEVC).
 func MP4Tag(codec string) string {

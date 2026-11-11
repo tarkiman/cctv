@@ -87,6 +87,8 @@ func (j *Janitor) RunOnce(ctx context.Context) error {
 		}
 	}
 
+	j.pruneQuarantine(now)
+
 	n, err := j.enforceFreeSpace(ctx)
 	deleted += n
 	if err != nil {
@@ -146,6 +148,20 @@ func (j *Janitor) remove(ctx context.Context, recs []store.Recording) (int, erro
 		n++
 	}
 	return n, nil
+}
+
+// QuarantineDays is how long broken segments set aside by the recorder are kept.
+const QuarantineDays = 3
+
+// pruneQuarantine deletes broken segments in recordings/<camera>/.quarantine older than
+// QuarantineDays.
+func (j *Janitor) pruneQuarantine(now time.Time) {
+	files, _ := filepath.Glob(filepath.Join(j.DataDir, "recordings", "*", ".quarantine", "*"))
+	for _, f := range files {
+		if info, err := os.Stat(f); err == nil && now.Sub(info.ModTime()) > QuarantineDays*24*time.Hour {
+			os.Remove(f)
+		}
+	}
 }
 
 // pruneEmptyDirs removes empty date folders under recordings/<camera>/.
