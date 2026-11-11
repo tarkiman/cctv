@@ -109,12 +109,53 @@ func recordArgs(input string, audio, wallclock bool, incoming string, segmentSec
 }
 
 // remuxArgs turns a finished TS segment into a faststart MP4 without re-encoding.
-func remuxArgs(src, dst, videoCodec string) []string {
+// fps > 0 rewrites the video timestamps as frame number / fps, for segments whose
+// timestamps are broken (see repairFPS).
+func remuxArgs(src, dst, videoCodec string, fps float64) []string {
 	args := []string{"-i", src, "-c", "copy"}
 	if tag := ffmpeg.MP4Tag(videoCodec); tag != "" {
 		args = append(args, "-tag:v", tag)
 	}
+	if fps > 0 {
+		args = append(args, "-bsf:v", fmt.Sprintf("setts=ts=N/(%.4f*TB)", fps))
+	}
 	return append(args, "-movflags", "+faststart", "-f", "mp4", "-y", dst)
+}
+
+const (
+	// minRepairBytes: a segment smaller than this with no readable duration really is
+	// empty (the stream dropped right after it began) and is not worth repairing.
+	minRepairBytes = 256 << 10
+	// quarantineKeep: broken originals kept per camera for diagnosis; the janitor
+	// deletes them after a few days (retention.QuarantineDays).
+	quarantineKeep = 5
+)
+
+// repairFPS decides whether a segment whose timestamps give no usable duration can be
+// kept: its real length is the time between its start (file name) and its last write
+// (mtime), and frames / that length is the rate to rebuild timestamps with. 0 = no.
+func repairFPS(size int64, start, modTime time.Time, frames int64, maxSeconds int) (fps, seconds float64) {
+	seconds = modTime.Sub(start).Seconds()
+	if size < minRepairBytes || frames <= 0 || seconds < 1 || seconds > float64(maxSeconds) {
+		return 0, 0
+	}
+	fps = float64(frames) / seconds
+	if fps < 0.5 || fps > 60 {
+		return 0, 0
+	}
+	return fps, seconds
+}
+
+// quarantine moves a broken TS segment to recordings/<camera>/.quarantine (kept a few
+// days for diagnosis) instead of deleting it; beyond quarantineKeep files it is deleted.
+func (r *Recorder) quarantine(slug, tsPath string) {
+	dir := filepath.Join(r.DataDir, "recordings", slug, ".quarantine")
+	if files, _ := filepath.Glob(filepath.Join(dir, "*.ts")); len(files) < quarantineKeep {
+		if err := os.MkdirAll(dir, 0o750); err == nil && os.Rename(tsPath, filepath.Join(dir, filepath.Base(tsPath))) == nil {
+			return
+		}
+	}
+	os.Remove(tsPath)
 }
 
 // audioAllowed reports whether audio may be recorded for a camera, i.e. it was not
@@ -334,11 +375,29 @@ func (r *Recorder) finalize(ctx context.Context, j job) error {
 	if err != nil {
 		return fmt.Errorf("unexpected segment name: %w", err)
 	}
+	fi, err := os.Stat(j.tsPath)
+	if err != nil {
+		return err
+	}
 	probe, err := r.Tools.ProbeFile(ctx, j.tsPath)
-	if err != nil || probe.Duration < 1 {
-		// Empty or corrupt segment (e.g. the stream dropped right after it began).
-		os.Remove(j.tsPath)
-		return fmt.Errorf("dropping unreadable segment: %v", err)
+	if err != nil {
+		// No video at all: empty or corrupt (e.g. the stream dropped right away).
+		r.quarantine(j.slug, j.tsPath)
+		return fmt.Errorf("dropping unreadable segment (%d bytes): %w", fi.Size(), err)
+	}
+	duration, fps := probe.Duration, 0.0
+	if duration < 1 {
+		// Frames but no usable duration: the source's timestamps broke (seen on a
+		// LIVE555 camera after it reconnected: hours of video were dropped as empty).
+		// Rebuild the timestamps from the frame count rather than lose the footage.
+		frames, _ := r.Tools.CountVideoPackets(ctx, j.tsPath)
+		fps, duration = repairFPS(fi.Size(), start, fi.ModTime(), frames, 2*r.SegmentSeconds+60)
+		if fps == 0 {
+			r.quarantine(j.slug, j.tsPath)
+			return fmt.Errorf("dropping segment without usable timestamps (%d bytes, %d frames, probe %.2fs)", fi.Size(), frames, probe.Duration)
+		}
+		r.Log.Warn("segment timestamps broken, rebuilt from frame count", "camera", j.slug,
+			"file", filepath.Base(j.tsPath), "bytes", fi.Size(), "frames", frames, "seconds", int(duration), "fps", fmt.Sprintf("%.2f", fps))
 	}
 
 	local := start.In(r.Location)
@@ -348,7 +407,7 @@ func (r *Recorder) finalize(ctx context.Context, j job) error {
 		return err
 	}
 	tmp := dst + ".tmp.mp4"
-	if err := r.Tools.Run(ctx, remuxArgs(j.tsPath, tmp, probe.Codec)...); err != nil {
+	if err := r.Tools.Run(ctx, remuxArgs(j.tsPath, tmp, probe.Codec, fps)...); err != nil {
 		os.Remove(tmp)
 		return fmt.Errorf("remux: %w", err)
 	}
@@ -360,7 +419,7 @@ func (r *Recorder) finalize(ctx context.Context, j job) error {
 		return err
 	}
 
-	end := start.Add(time.Duration(probe.Duration * float64(time.Second)))
+	end := start.Add(time.Duration(duration * float64(time.Second)))
 	rec := &store.Recording{
 		CameraID:  j.cameraID,
 		StartAt:   start.Unix(),
@@ -374,7 +433,11 @@ func (r *Recorder) finalize(ctx context.Context, j job) error {
 	if err := r.Store.Recordings.Insert(ctx, rec); err != nil {
 		return fmt.Errorf("index: %w", err)
 	}
-	os.Remove(j.tsPath)
+	if fps > 0 {
+		r.quarantine(j.slug, j.tsPath) // keep the broken original for diagnosis
+	} else {
+		os.Remove(j.tsPath)
+	}
 	r.Health.SegmentWritten(j.cameraID, end)
 	if j.audio {
 		if probe.Audio != "" {

@@ -2,14 +2,22 @@ package recorder
 
 import (
 	"context"
+	"database/sql"
+	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/tarkiman/cctv/nvr/server/internal/db"
 	"github.com/tarkiman/cctv/nvr/server/internal/ffmpeg"
+	"github.com/tarkiman/cctv/nvr/server/internal/health"
+	"github.com/tarkiman/cctv/nvr/server/internal/sse"
+	"github.com/tarkiman/cctv/nvr/server/internal/store"
 )
 
 func TestRecordArgs(t *testing.T) {
@@ -116,7 +124,7 @@ func TestRecordAndRemux(t *testing.T) {
 				t.Fatal(err)
 			}
 			mp4 := filepath.Join(dir, "out.mp4")
-			if err := tools.Run(ctx, remuxArgs(segs[0], mp4, p.Codec)...); err != nil {
+			if err := tools.Run(ctx, remuxArgs(segs[0], mp4, p.Codec, 0)...); err != nil {
 				t.Fatalf("remux: %v", err)
 			}
 			out, err := tools.ProbeFile(ctx, mp4)
@@ -160,5 +168,107 @@ func TestAudioErrRe(t *testing.T) {
 		if audioErrRe.MatchString(l) {
 			t.Errorf("video/connection line matched: %q", l)
 		}
+	}
+}
+
+func TestRepairFPS(t *testing.T) {
+	start := time.Date(2026, 11, 10, 5, 50, 0, 0, time.UTC)
+	if fps, sec := repairFPS(20<<20, start, start.Add(600*time.Second), 15000, 1260); fps != 25 || sec != 600 {
+		t.Fatalf("fps %.2f sec %.0f, want 25 / 600", fps, sec)
+	}
+	for _, c := range []struct {
+		name   string
+		size   int64
+		end    time.Duration
+		frames int64
+	}{
+		{"tiny file", 10 << 10, 600 * time.Second, 15000},
+		{"no frames", 20 << 20, 600 * time.Second, 0},
+		{"mtime before start", 20 << 20, -time.Second, 15000},
+		{"far too long", 20 << 20, 5 * time.Hour, 15000},
+		{"absurd rate", 20 << 20, 10 * time.Second, 15000},
+	} {
+		if fps, _ := repairFPS(c.size, start, start.Add(c.end), c.frames, 1260); fps != 0 {
+			t.Errorf("%s: repaired at %.2f fps", c.name, fps)
+		}
+	}
+}
+
+// TestFinalizeBrokenTimestamps: a segment whose video timestamps collapsed (all zero) is
+// kept with timestamps rebuilt from its frame count; a tiny broken one is quarantined.
+func TestFinalizeBrokenTimestamps(t *testing.T) {
+	ff, err1 := exec.LookPath("ffmpeg")
+	fp, err2 := exec.LookPath("ffprobe")
+	if err1 != nil || err2 != nil {
+		t.Skip("ffmpeg not installed")
+	}
+	ctx := context.Background()
+	dir := t.TempDir()
+	d, err := db.Open(ctx, filepath.Join(dir, "nvr.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	st := store.New(d)
+	camID, err := st.Cameras.CreateDiscovered(ctx, "taman", "taman", sql.NullString{}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &Recorder{
+		Tools: ffmpeg.Tools{FFmpeg: ff, FFprobe: fp}, Store: st, Health: health.New(sse.NewHub()),
+		DataDir: dir, Location: time.UTC, SegmentSeconds: 600, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	incoming := r.incomingDir("taman")
+	if err := os.MkdirAll(incoming, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 11, 10, 5, 50, 0, 0, time.UTC)
+	broken := func(name string, seconds int, size string) string {
+		good := filepath.Join(dir, name+".good.ts")
+		bad := filepath.Join(incoming, start.Format(nameLayout)+".ts")
+		if err := r.Tools.Run(ctx, "-f", "lavfi", "-i", "testsrc=size="+size+":rate=15", "-t", strconv.Itoa(seconds),
+			"-c:v", "libx264", "-bf", "0", "-g", "15", "-pix_fmt", "yuv420p", "-f", "mpegts", "-y", good); err != nil {
+			t.Skipf("cannot build source (%v)", err)
+		}
+		if err := r.Tools.Run(ctx, "-i", good, "-c", "copy", "-bsf:v", "setts=ts=0", "-f", "mpegts", "-y", bad); err != nil {
+			t.Fatal(err)
+		}
+		end := start.Add(time.Duration(seconds) * time.Second)
+		if err := os.Chtimes(bad, end, end); err != nil {
+			t.Fatal(err)
+		}
+		return bad
+	}
+
+	// Big enough to repair: 20 s at 15 fps, written over 20 s.
+	ts := broken("big", 20, "1280x720")
+	if p, err := r.Tools.ProbeFile(ctx, ts); err != nil || p.Duration >= 1 {
+		t.Fatalf("test segment should probe as <1 s: %+v %v", p, err)
+	}
+	if err := r.finalize(ctx, job{cameraID: camID, slug: "taman", tsPath: ts}); err != nil {
+		t.Fatalf("finalize: %v", err)
+	}
+	rec, err := st.Recordings.Latest(ctx, camID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := rec.EndAt - rec.StartAt; got != 20 {
+		t.Fatalf("indexed length %d s, want 20", got)
+	}
+	mp4, err := r.Tools.ProbeFile(ctx, filepath.Join(dir, rec.Path))
+	if err != nil || mp4.Duration < 19.5 || mp4.Duration > 20.5 {
+		t.Fatalf("repaired mp4 duration %+v %v", mp4, err)
+	}
+	if q, _ := filepath.Glob(filepath.Join(dir, "recordings", "taman", ".quarantine", "*.ts")); len(q) != 1 {
+		t.Fatalf("original not kept in quarantine: %v", q)
+	}
+
+	// Too small to be worth it: dropped into quarantine, nothing indexed.
+	ts = broken("small", 2, "64x64")
+	if err := r.finalize(ctx, job{cameraID: camID, slug: "taman", tsPath: ts}); err == nil {
+		t.Fatal("tiny broken segment was indexed")
+	}
+	if _, err := os.Stat(ts); !os.IsNotExist(err) {
+		t.Fatal("tiny broken segment left in .incoming")
 	}
 }

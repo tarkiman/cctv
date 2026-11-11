@@ -86,6 +86,14 @@ Kalau hanya timeout tanpa error (mis. koneksi P2P Xiaomi lambat), audio dicoba l
 1 jam kemudian. Live: go2rtc sudah mengirim Opus/FLAC lewat MSE; pemutar mulai
 bisu dan punya tombol suara.
 
+Segmen rusak (sejak 2026-11-11): segmen yang berisi frame tetapi durasinya terbaca < 1
+dtk (timestamp kamera kacau; pernah membuang ±8,5 jam rekaman `cctv-taman` setelah
+kameranya tersambung ulang) **tidak dibuang**. Panjang aslinya = waktu tulis terakhir
+file − waktu mulai di nama file; timestamp video disusun ulang saat remux
+(`-bsf:v setts=ts=N/(fps*TB)`, fps = jumlah frame / panjang). Segmen tanpa video atau
+terlalu kecil (< 256 KB) dipindah ke `recordings/<kamera>/.quarantine/` (maks. 5 per
+kamera, juga salinan asli segmen yang diperbaiki), dihapus janitor setelah 3 hari.
+
 ### Snapshot & timelapse
 `ffmpeg -skip_frame nokey -i rtsp://127.0.0.1:8556/<stream> -frames:v 1 -vf scale=-2:480 <file>.jpg`
 — decoder hanya memproses keyframe, jadi biayanya satu gambar per menit, bukan 15 fps.
