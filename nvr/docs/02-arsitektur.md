@@ -93,6 +93,12 @@ file − waktu mulai di nama file; timestamp video disusun ulang saat remux
 (`-bsf:v setts=ts=N/(fps*TB)`, fps = jumlah frame / panjang). Segmen tanpa video atau
 terlalu kecil (< 256 KB) dipindah ke `recordings/<kamera>/.quarantine/` (maks. 5 per
 kamera, juga salinan asli segmen yang diperbaiki), dihapus janitor setelah 3 hari.
+Penyebabnya (terbukti dari segmen `cam1` di karantina, 2026-11-11): kamera LIVE555
+kadang mengirim timestamp video yang **macet**, sehingga ffmpeg menaikkannya hanya ±10 µs
+per frame. Setelah satu segmen perlu diperbaiki, perekam kamera itu otomatis di-restart
+dengan `-use_wallclock_as_timestamps 1` (waktu kedatangan) sampai nvrd dimulai ulang,
+jadi segmen berikutnya tidak rusak lagi. Ini bukan default karena waktu kedatangan lewat
+WiFi/relay sedikit tersendat (frame berdekatan).
 
 ### Snapshot & timelapse
 `ffmpeg -skip_frame nokey -i rtsp://127.0.0.1:8556/<stream> -frames:v 1 -vf scale=-2:480 <file>.jpg`
