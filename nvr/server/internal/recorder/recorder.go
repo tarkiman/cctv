@@ -49,6 +49,19 @@ type Recorder struct {
 
 	audioMu      sync.Mutex
 	audioBlocked map[int64]time.Time // camera -> audio retry time; zero = until Reload/restart
+
+	// Cameras whose source timestamps froze (a repaired segment): they are recorded with
+	// arrival-time timestamps from then on, until nvrd restarts.
+	clockMu   sync.Mutex
+	wallclock map[int64]bool
+	runs      map[int64]*run
+}
+
+// run is one ffmpeg recording run of a camera, so finalize can restart it.
+type run struct {
+	cancel    context.CancelFunc
+	wallclock bool
+	restart   atomic.Bool // set when the run is cancelled to switch to wallclock
 }
 
 type job struct {
@@ -106,6 +119,53 @@ func recordArgs(input string, audio, wallclock bool, incoming string, segmentSec
 		"-segment_list_type", "csv",
 		filepath.Join(incoming, "%Y%m%dT%H%M%S.ts"),
 	)
+}
+
+// useWallclock reports whether a camera is recorded with arrival-time timestamps
+// because its own timestamps froze before.
+func (r *Recorder) useWallclock(id int64) bool {
+	r.clockMu.Lock()
+	defer r.clockMu.Unlock()
+	return r.wallclock[id]
+}
+
+// switchToWallclock is called when a segment of the camera had to be repaired: its
+// source timestamps froze (LIVE555 cameras do this after reconnecting; the video's
+// timestamps then advance ~10 µs per frame), and every later segment of the same run
+// would need repair too. It restarts the camera's recording with arrival-time
+// timestamps, which ignore the source clock.
+func (r *Recorder) switchToWallclock(id int64, slug string) {
+	r.clockMu.Lock()
+	defer r.clockMu.Unlock()
+	if r.wallclock[id] {
+		return
+	}
+	if r.wallclock == nil {
+		r.wallclock = map[int64]bool{}
+	}
+	r.wallclock[id] = true
+	r.Log.Warn("camera timestamps froze, recording with arrival-time timestamps", "camera", slug)
+	if ru := r.runs[id]; ru != nil && !ru.wallclock {
+		ru.restart.Store(true)
+		ru.cancel()
+	}
+}
+
+func (r *Recorder) register(id int64, ru *run) {
+	r.clockMu.Lock()
+	defer r.clockMu.Unlock()
+	if r.runs == nil {
+		r.runs = map[int64]*run{}
+	}
+	r.runs[id] = ru
+}
+
+func (r *Recorder) unregister(id int64, ru *run) {
+	r.clockMu.Lock()
+	defer r.clockMu.Unlock()
+	if r.runs[id] == ru {
+		delete(r.runs, id)
+	}
 }
 
 // remuxArgs turns a finished TS segment into a faststart MP4 without re-encoding.
@@ -253,8 +313,19 @@ func (r *Recorder) RunCamera(ctx context.Context, cam store.Camera) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	logRing := r.Health.Log(cam.ID)
+	// Arrival-time timestamps: Xiaomi audio timestamps are broken from the start; other
+	// cameras get them after their own timestamps froze once (switchToWallclock).
+	wallclock := (audio && r.Health.Xiaomi(cam.ID)) || r.useWallclock(cam.ID)
+	ru := &run{cancel: cancel, wallclock: wallclock}
+	r.register(cam.ID, ru)
+	defer r.unregister(cam.ID, ru)
+	if wallclock && !(audio && r.Health.Xiaomi(cam.ID)) {
+		logRing.Add("nvrd: timestamp kamera pernah macet; merekam dengan timestamp waktu kedatangan")
+	}
+
 	cmd := r.Tools.Command(ctx, recordArgs(r.Tools.StreamURL(cam.RecordStreamName()),
-		audio, audio && r.Health.Xiaomi(cam.ID), incoming, r.SegmentSeconds)...)
+		audio, wallclock, incoming, r.SegmentSeconds)...)
 	// -strftime uses the process time zone; file names must be UTC.
 	cmd.Env = append(os.Environ(), "TZ=UTC")
 	stdout, err := cmd.StdoutPipe()
@@ -265,7 +336,6 @@ func (r *Recorder) RunCamera(ctx context.Context, cam store.Camera) error {
 	if err != nil {
 		return err
 	}
-	logRing := r.Health.Log(cam.ID)
 	started := time.Now()
 	if err := cmd.Start(); err != nil {
 		return err
@@ -326,6 +396,9 @@ func (r *Recorder) RunCamera(ctx context.Context, cam store.Camera) error {
 	}
 
 	err = cmd.Wait()
+	if ru.restart.Load() && parent.Err() == nil {
+		return r.RunCamera(parent, cam) // now with arrival-time timestamps
+	}
 	// Audio that never decodes keeps ffmpeg from writing anything (or makes it quit with
 	// a decode error), which would leave the camera unrecorded. Record video only.
 	if audio && parent.Err() == nil && !wroteSince(incoming, started) && (audioStuck.Load() || audioErr.Load()) {
@@ -434,6 +507,7 @@ func (r *Recorder) finalize(ctx context.Context, j job) error {
 		return fmt.Errorf("index: %w", err)
 	}
 	if fps > 0 {
+		r.switchToWallclock(j.cameraID, j.slug)
 		r.quarantine(j.slug, j.tsPath) // keep the broken original for diagnosis
 	} else {
 		os.Remove(j.tsPath)

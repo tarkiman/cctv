@@ -272,3 +272,32 @@ func TestFinalizeBrokenTimestamps(t *testing.T) {
 		t.Fatal("tiny broken segment left in .incoming")
 	}
 }
+
+func TestSwitchToWallclock(t *testing.T) {
+	r := &Recorder{Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	ctx, cancel := context.WithCancel(context.Background())
+	ru := &run{cancel: cancel}
+	r.register(7, ru)
+	if r.useWallclock(7) {
+		t.Fatal("wallclock off by default")
+	}
+	r.switchToWallclock(7, "taman")
+	if !r.useWallclock(7) || !ru.restart.Load() || ctx.Err() == nil {
+		t.Fatal("a repaired segment must restart the run with wallclock")
+	}
+
+	// Already on wallclock: no restart loop.
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	ru2 := &run{cancel: cancel2, wallclock: true}
+	r.unregister(7, ru)
+	r.register(7, ru2)
+	r.switchToWallclock(7, "taman")
+	if ru2.restart.Load() || ctx2.Err() != nil {
+		t.Fatal("run already on wallclock was restarted")
+	}
+	r.unregister(7, ru2)
+	if r.runs[7] != nil {
+		t.Fatal("unregister")
+	}
+}
