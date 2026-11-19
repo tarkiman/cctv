@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/tarkiman/cctv/nvr/server/internal/ffmpeg"
 	"github.com/tarkiman/cctv/nvr/server/internal/health"
 	"github.com/tarkiman/cctv/nvr/server/internal/store"
+	"github.com/tarkiman/cctv/nvr/server/internal/vision"
 )
 
 // ErrSettingsChanged makes the supervisor restart the worker with new settings.
@@ -23,8 +25,18 @@ type Worker struct {
 	Tools  ffmpeg.Tools
 	Store  *store.Store
 	Health *health.Tracker
+	// Vision, when set, is asked to analyse people while there is motion in a camera
+	// with zones (Tahap E). nil = motion detection only.
+	Vision *vision.Client
 	Log    *slog.Logger
 }
+
+// visionEvery is how often an ongoing motion re-extends nvr-vision's session; the
+// session itself lasts visionSeconds, so it outlives the motion by a few seconds.
+const (
+	visionEvery   = 8 * time.Second
+	visionSeconds = 20
+)
 
 type params struct {
 	fps       int
@@ -92,7 +104,20 @@ func (w *Worker) RunCamera(ctx context.Context, cam store.Camera) error {
 		buf        = make([]byte, FrameW*FrameH)
 		frames     int
 		runErr     error
+		lastWatch  time.Time
+		watchFails atomic.Int64
 	)
+	watch := func(zones []store.Zone) {
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		if err := w.Vision.Watch(ctx, cam.ID, cam.StreamFor("sub"), cam.MainStream, zones, visionSeconds); err != nil {
+			if n := watchFails.Add(1); n == 1 || n%50 == 0 {
+				w.Log.Warn("nvr-vision not reachable", "camera", cam.Slug, "err", err, "failures", n)
+			}
+			return
+		}
+		watchFails.Store(0)
+	}
 	closeEvent := func(peak float64) {
 		if eventID == 0 {
 			return
@@ -120,6 +145,12 @@ func (w *Worker) RunCamera(ctx context.Context, cam store.Camera) error {
 		if res.Motion {
 			lastMotion = now
 		}
+		// Motion in the zones: let nvr-vision look for people (not in a whole-picture
+		// change such as the IR switching, nor for cameras without zones).
+		if w.Vision != nil && gate.Mask != nil && res.Motion && !res.Global && now.Sub(lastWatch) >= visionEvery {
+			lastWatch = now
+			go watch(zones)
+		}
 		switch t, peak := tr.Step(res); t {
 		case Started:
 			id, err := w.Store.Events.Start(ctx, cam.ID, "motion", now.Unix())
@@ -137,7 +168,8 @@ func (w *Worker) RunCamera(ctx context.Context, cam store.Camera) error {
 			recheck = now.Add(30 * time.Second)
 			np := w.params(ctx)
 			gate.Threshold, gate.MinArea = np.threshold, np.minArea
-			if zones, err := w.Store.Zones.List(ctx, cam.ID); err == nil {
+			if zs, err := w.Store.Zones.List(ctx, cam.ID); err == nil {
+				zones = zs
 				gate.Mask = ZoneMask(zones) // zones drawn in Pengaturan apply live too
 			}
 			if np.fps != p.fps {

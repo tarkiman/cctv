@@ -25,6 +25,7 @@ import (
 	"github.com/tarkiman/cctv/nvr/server/internal/sse"
 	"github.com/tarkiman/cctv/nvr/server/internal/store"
 	"github.com/tarkiman/cctv/nvr/server/internal/sysinfo"
+	"github.com/tarkiman/cctv/nvr/server/internal/vision"
 )
 
 type env struct {
@@ -57,7 +58,8 @@ func newEnv(t *testing.T) *env {
 	tracker := health.New(hub)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := &Server{
-		Config: &config.Config{DataDir: dir, Location: loc},
+		Config: &config.Config{DataDir: dir, Location: loc, VisionURL: "http://vision", VisionToken: testVisionToken},
+		Vision: &vision.Tracker{Store: st, DataDir: dir, Log: logger, Quiet: 10 * time.Second, FaceEvery: time.Second},
 		Store:  st, Auth: a, Go2rtc: go2rtc.New("http://127.0.0.1:1"), Health: tracker,
 		// Not started: reloads after a settings change are no-ops.
 		Cameras: &camera.Manager{Store: st, Health: tracker, Log: logger},
@@ -224,5 +226,42 @@ func TestCameraZones(t *testing.T) {
 	}
 	if r := e.do(t, "PUT", path, `[]`, true); r.StatusCode != http.StatusOK {
 		t.Fatalf("clearing zones: %d", r.StatusCode)
+	}
+}
+
+const testVisionToken = "vision-test-token-0123456789"
+
+func TestVisionReport(t *testing.T) {
+	e := newEnv(t)
+	post := func(token, body string) int {
+		req, _ := http.NewRequest("POST", e.srv.URL+"/api/v1/vision/report", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(auth.CSRFHeader, auth.CSRFValue)
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		r, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.Body.Close()
+		return r.StatusCode
+	}
+	body := fmt.Sprintf(`{"camera_id":%d,"at":%d,"persons":[{"zone":"inside","box":[0.1,0.5,0.1,0.4],"score":0.7}]}`, e.camID, time.Now().Unix())
+	if c := post("", body); c != http.StatusUnauthorized {
+		t.Fatalf("no token: %d", c)
+	}
+	if c := post("wrong", body); c != http.StatusUnauthorized {
+		t.Fatalf("wrong token: %d", c)
+	}
+	if c := post(testVisionToken, `{"camera_id":999,"at":1}`); c != http.StatusNotFound {
+		t.Fatalf("unknown camera: %d", c)
+	}
+	if c := post(testVisionToken, body); c != http.StatusNoContent {
+		t.Fatalf("report: %d", c)
+	}
+	evs, _ := e.store.Events.Range(context.Background(), e.camID, time.Now().Unix()-60, time.Now().Unix()+60)
+	if len(evs) != 1 || evs[0].Label != "person" || evs[0].Zone.String != "inside" {
+		t.Fatalf("person event = %+v", evs)
 	}
 }

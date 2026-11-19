@@ -245,7 +245,8 @@ Kamera `bardi` (Teras), dua zona:
   virtual (suara xiaozhi) yang menyambut tamu / menegur orang mondar-mandir.
 
 Arsitektur: `umma` hanya gerbang gerak murah yang dibatasi zona; Raspberry Pi (decode
-HEVC hardware) menjalankan deteksi orang, deteksi & embedding wajah saat dipicu. Data
-wajah disimpan lokal. Urutan: (1) zona — selesai di PR ini; (2) layanan wajah/orang di
-Pi; (3) galeri wajah, notifikasi, event. Hasil uji kelayakan: S11 di `09-roadmap.md`.
+HEVC) menjalankan deteksi orang, deteksi & embedding wajah saat dipicu (D15). Data
+wajah disimpan lokal. Urutan: (1) zona — selesai (#13); (2) layanan wajah/orang di Pi
+(`nvr/vision`, event `person` per zona, sampel wajah) — PR berikutnya; (3) galeri wajah,
+notifikasi, event untuk asisten. Hasil uji kelayakan: S11 di `09-roadmap.md`.
 

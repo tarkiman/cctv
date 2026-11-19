@@ -131,6 +131,19 @@ CREATE TABLE events (
 CREATE INDEX idx_events_camera_time ON events(camera_id, start_at);
 CREATE INDEX idx_events_time        ON events(start_at);
 
+-- 0007_vision.sql: events.zone ('inside'/'outside' untuk label 'person') dan sampel wajah
+CREATE TABLE face_samples (
+    id        INTEGER PRIMARY KEY,
+    camera_id INTEGER NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
+    at        INTEGER NOT NULL,          -- unix ms
+    zone      TEXT    NOT NULL,
+    path      TEXT    NOT NULL,          -- faces/<kamera>/<tanggal>/<ms>.jpg
+    score     REAL    NOT NULL,
+    size      INTEGER NOT NULL,          -- tinggi wajah (px, stream utama)
+    embedding BLOB    NOT NULL,          -- 128 × float32 LE, ternormalisasi (SFace)
+    person_id INTEGER                    -- diisi saat diberi nama (langkah 3); yang kosong dihapus setelah 7 hari
+);
+
 -- 0006_zones.sql: zona deteksi per kamera (digambar di Pengaturan)
 CREATE TABLE camera_zones (
     id         INTEGER PRIMARY KEY,

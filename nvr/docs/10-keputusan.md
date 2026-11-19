@@ -140,3 +140,20 @@ dibatalkan tidak dihapus, cukup ditandai **Diganti oleh Dn**.
   bergeser bila ada paket hilang.
 - **Konsekuensi:** satu encoder AAC per kamera (beban kecil; diukur di `umma`). Live dan
   rekaman mulai bisu (aturan autoplay browser) dengan tombol suara. Bicara balik belum.
+
+## D15. Analisis orang & wajah di Raspberry Pi, mengambil video dari go2rtc lewat LAN
+- **Konteks:** `umma` (4× A53, 1,8 GB) terlalu kecil untuk deteksi orang dan wajah; spike
+  S11 menunjukkan Pi 5 cukup (±0,5 core saat ada aktivitas). Pengguna memilih (2026-11-19)
+  membuka RTSP go2rtc ke LAN dengan login, alih-alih Pi tersambung langsung ke kamera.
+- **Keputusan:** layanan `nvr-vision` (Python, YOLOX-nano + YuNet + SFace, ONNX Runtime/
+  OpenCV) di Pi. `nvrd` memanggil `POST /watch` setiap ±8 dtk selama ada gerak di zona
+  (bukan perubahan menyeluruh); sesi berlaku 20 dtk. Pi membaca sub-stream (3 fps) dan,
+  selama ada orang di dalam pagar (+15 dtk), stream utama — deteksi orang lalu berjalan di
+  frame HD itu agar kotak orang dan wajah sejajar. Hasil dikirim balik ke
+  `POST /api/v1/vision/report`; token rahasia bersama untuk kedua arah.
+- **Zona orang:** *dalam* = titik kaki di zona dalam; *depan* = kaki atau ≥ ¼ kotak di
+  zona depan (kaki sering tertutup gerbang).
+- **Konsekuensi:** stream kamera bisa diakses dari LAN/ZeroTier dengan password acak; Pi
+  menjadi bagian sistem produksi (dibatasi 2 core/600 MB). Decode HEVC di container
+  memakai software (decoder hardware Pi tidak tersedia di image Debian); dipakai hanya
+  selama ada orang di dalam pagar. Belum ada notifikasi — langkah 3.

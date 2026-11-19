@@ -186,3 +186,26 @@ Tombol **Kirim pesan tes** ada di halaman Status (admin). Pratinjau format ke we
 - [ ] Playback & export klip hari ini.
 - [ ] `docker stats --no-stream`: nvrd + go2rtc < 20% CPU, < 200 MB RAM.
 - [ ] Notifikasi "NVR Lite aktif" diterima.
+
+## nvr-vision di Raspberry Pi (Tahap E, sejak 2026-11-19)
+
+Deteksi orang dan wajah berjalan di mesin lain (Pi), bukan di `umma`. `nvrd` hanya
+memicunya saat ada gerak di zona kamera; Pi mengambil video dari go2rtc `umma` lewat LAN.
+
+1. **go2rtc di `umma`** (`/DATA/cctv/nvr/go2rtc/go2rtc.yaml`): `rtsp.listen: ":8556"`
+   plus `username: vision` dan password acak panjang, lalu `docker restart nvr-go2rtc`.
+   `nvrd` tetap memakai `127.0.0.1:8556` dan tidak dimintai login (go2rtc membebaskan
+   loopback), jadi rekaman tidak terpengaruh.
+2. **Pi**: salin `nvr/vision/docker-compose.yml` dan buat `.env` dari `.env.example`
+   (chmod 600): `VISION_TOKEN`, `VISION_RTSP=rtsp://vision:<password>@192.168.1.20:8556`,
+   `VISION_CALLBACK=http://192.168.1.20:8091/api/v1/vision/report`, lalu
+   `docker compose up -d`. Dibatasi 2 core dan 600 MB karena Pi dipakai layanan lain.
+3. **`umma` `.env`**: `NVR_VISION_URL=http://192.168.1.13:8093` dan
+   `NVR_VISION_TOKEN` (sama dengan Pi), lalu `docker compose up -d nvrd`.
+4. Gambar zona kamera di Pengaturan dan nyalakan **Deteksi gerak** untuk kamera itu;
+   tanpa zona, nvr-vision tidak dipanggil.
+
+Cek: `curl -H "Authorization: Bearer $VISION_TOKEN" http://192.168.1.13:8093/healthz`
+(sesi aktif, waktu inferensi, jumlah laporan). Beban terukur di Pi: ±0,4–0,5 core dan
+±130–290 MB selama ada aktivitas; diam di luar itu.
+

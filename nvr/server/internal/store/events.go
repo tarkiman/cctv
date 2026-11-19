@@ -17,11 +17,12 @@ type Event struct {
 	SnapshotPath sql.NullString  `db:"snapshot_path"`
 	Box          sql.NullString  `db:"box"`
 	Reviewed     bool            `db:"reviewed"`
+	Zone         sql.NullString  `db:"zone"`
 }
 
 type EventStore struct{ db *sqlx.DB }
 
-const eventCols = `id, camera_id, label, score, start_at, end_at, snapshot_path, box, reviewed`
+const eventCols = `id, camera_id, label, score, start_at, end_at, snapshot_path, box, reviewed, zone`
 
 // Start records the beginning of an event and returns its ID.
 func (s *EventStore) Start(ctx context.Context, cameraID int64, label string, at int64) (int64, error) {
@@ -32,15 +33,31 @@ func (s *EventStore) Start(ctx context.Context, cameraID int64, label string, at
 	return res.LastInsertId()
 }
 
+// StartInZone records the beginning of a person event in a zone ("inside"/"outside").
+func (s *EventStore) StartInZone(ctx context.Context, cameraID int64, label, zone string, at int64) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `INSERT INTO events (camera_id, label, zone, start_at) VALUES (?, ?, ?, ?)`, cameraID, label, zone, at)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// CloseDanglingLabel ends open events of one label (e.g. person events after a restart).
+func (s *EventStore) CloseDanglingLabel(ctx context.Context, label string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE events SET end_at = start_at WHERE label = ? AND end_at IS NULL`, label)
+	return err
+}
+
 // End closes an event with its final score.
 func (s *EventStore) End(ctx context.Context, id, at int64, score float64) error {
 	_, err := s.db.ExecContext(ctx, `UPDATE events SET end_at = ?, score = ? WHERE id = ?`, at, score, id)
 	return err
 }
 
-// CloseDangling ends events left open by a crash or restart, at their start time.
+// CloseDangling ends motion events left open by a crash or restart, at their start
+// time (person events are closed by the vision tracker).
 func (s *EventStore) CloseDangling(ctx context.Context, cameraID int64) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE events SET end_at = start_at WHERE camera_id = ? AND end_at IS NULL`, cameraID)
+	_, err := s.db.ExecContext(ctx, `UPDATE events SET end_at = start_at WHERE camera_id = ? AND label = 'motion' AND end_at IS NULL`, cameraID)
 	return err
 }
 

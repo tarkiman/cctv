@@ -1,0 +1,14 @@
+# nvr-vision on the analysis machine (the Raspberry Pi). Values in .env next to this file:
+#   VISION_TOKEN=<same as NVR_VISION_TOKEN on the NVR host>
+#   VISION_RTSP=rtsp://vision:<password>@<nvr-host>:8556
+#   VISION_CALLBACK=http://<nvr-host>:8091/api/v1/vision/report
+services:
+  vision:
+    image: ghcr.io/tarkiman/cctv-nvr-vision:${VISION_TAG:-latest}
+    container_name: nvr-vision
+    restart: unless-stopped
+    ports: ["8093:8093"]
+    env_file: .env
+    # The Pi is shared with other services: at most two cores and 600 MB.
+    cpus: ${VISION_CPUS:-2.0}
+    mem_limit: 600m
