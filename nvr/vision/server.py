@@ -9,8 +9,9 @@ reads that camera's sub-stream from go2rtc (RTSP, over the LAN), runs person det
   outside - the feet, or at least a quarter of the box, are in an "outside" zone
             (people right behind the gate often have their feet hidden by it)
 
-While someone is inside, the main stream is read too (and people are then detected on
-its frames, so boxes and faces line up), and faces are found (YuNet) in
+Once someone is in a zone, the main stream is read too (kept open 15 s after the last
+person; people are then detected on its frames, so boxes and faces line up), analysis
+runs at 5 fps while someone is inside, and faces are found (YuNet) in
 the upper part of each inside person's box at full resolution and turned into 128-d
 embeddings (SFace). Results go back to nvrd (POST VISION_CALLBACK) about once per
 processed frame that has people in zones. Nothing is stored here.
@@ -46,7 +47,9 @@ PERSON_MIN = float(os.environ.get("VISION_PERSON_MIN", "0.45"))
 FACE_MIN = float(os.environ.get("VISION_FACE_MIN", "0.6"))  # spike S11: real faces scored 0.61–0.91
 MODELS = os.environ.get("VISION_MODELS", "/models")
 MAX_SECONDS = 60
-HD_LINGER = 15  # seconds the main stream stays open after the last person inside
+HD_LINGER = 15  # seconds the main stream stays open after the last person in a zone
+SUB_WARM = int(os.environ.get("VISION_SUB_WARM", "300"))  # seconds the sub-stream stays open
+FAST_FPS = float(os.environ.get("VISION_FAST_FPS", "5"))  # analysis rate while someone is inside
 MAX_BODY = 64 << 10
 
 cv2.setNumThreads(1)
@@ -182,12 +185,15 @@ def zone_of(zones, box):
 # --- streams --------------------------------------------------------------------------
 class Reader(threading.Thread):
     """Reads an RTSP stream continuously and keeps only the latest frame, so analysis
-    never lags behind live."""
+    never lags behind live. Readers are shared and kept open for a while after their
+    last use (see reader()): opening a stream costs seconds (until its next keyframe),
+    which is exactly when someone walks up to the camera."""
 
-    def __init__(self, name):
+    def __init__(self, name, linger):
         super().__init__(daemon=True)
         self.name, self.frame, self.at, self.stop = name, None, 0.0, threading.Event()
         self.error = ""
+        self.used, self.linger = time.time(), linger
 
     def run(self):
         while not self.stop.is_set():
@@ -201,11 +207,37 @@ class Reader(threading.Thread):
                 if not ok:
                     self.error = "stream ended"
                     break
-                self.frame, self.at = frame, time.time()
+                self.frame, self.at, self.error = frame, time.time(), ""
             cap.release()
 
     def latest(self, max_age=2.0):
         return self.frame if time.time() - self.at <= max_age else None
+
+
+readers, readers_lock = {}, threading.Lock()
+
+
+def reader(name, linger):
+    """The shared reader of a stream, started if needed and marked as used now."""
+    with readers_lock:
+        r = readers.get(name)
+        if r is None or r.stop.is_set() or not r.is_alive():
+            r = Reader(name, linger)
+            readers[name] = r
+            r.start()
+        r.used = time.time()
+        r.linger = linger
+        return r
+
+
+def reap():
+    while True:
+        time.sleep(5)
+        with readers_lock:
+            for name, r in list(readers.items()):
+                if time.time() - r.used > r.linger:
+                    r.stop.set()
+                    del readers[name]
 
 
 class Session(threading.Thread):
@@ -213,40 +245,32 @@ class Session(threading.Thread):
         super().__init__(daemon=True)
         self.camera_id = req["camera_id"]
         self.update(req)
-        self.sub = Reader(req["sub"])
-        self.main_name = req["main"]
-        self.main = None
+        self.hd_until = 0.0  # keep the main stream open until then
         self.last_inside = 0.0
 
     def update(self, req):
         self.zones = [{"kind": z["kind"], "points": [tuple(p) for p in z["points"]]} for z in req.get("zones", [])]
         self.until = max(getattr(self, "until", 0), time.time() + min(MAX_SECONDS, float(req.get("seconds", 20))))
-        self.main_name = req.get("main", getattr(self, "main_name", ""))
+        self.sub_name, self.main_name = req["sub"], req["main"]
+
+    def hd(self):
+        return reader(self.main_name, HD_LINGER) if time.time() < self.hd_until else None
 
     def run(self):
-        self.sub.start()
-        period = 1 / SAMPLE_FPS
         try:
             while time.time() < self.until:
                 t0 = time.time()
-                frame = self.sub.latest()
+                # The sub-stream stays warm for SUB_WARM after the session.
+                frame = reader(self.sub_name, SUB_WARM).latest()
                 if frame is not None:
                     try:
                         self.analyse(frame)
                     except Exception as e:  # keep the session alive; report what broke
                         stats["last_error"] = f"analyse: {e!r}"[:200]
                         print(f"camera {self.camera_id}: analyse failed: {e!r}", flush=True)
-                if self.main and time.time() - self.last_inside > HD_LINGER:
-                    # Nobody inside for a while: stop the HD decode. Not sooner: person
-                    # detection flickers, and reopening the stream takes a few seconds
-                    # (until its next keyframe), which would miss the faces.
-                    self.main.stop.set()
-                    self.main = None
-                time.sleep(max(0.0, period - (time.time() - t0)))
+                fast = time.time() - self.last_inside < 3
+                time.sleep(max(0.0, 1 / (FAST_FPS if fast else SAMPLE_FPS) - (time.time() - t0)))
         finally:
-            self.sub.stop.set()
-            if self.main:
-                self.main.stop.set()
             with sessions_lock:
                 if sessions.get(self.camera_id) is self:
                     del sessions[self.camera_id]
@@ -255,7 +279,8 @@ class Session(threading.Thread):
         # While the HD stream is open, detect people on the HD frame itself (scaled
         # down): sub and main stream decode with different delays, and boxes from one
         # don't line up with faces in the other when the person moves.
-        hd = self.main.latest() if self.main else None
+        main = self.hd()
+        hd = main.latest() if main else None
         frame = cv2.resize(hd, (640, 360)) if hd is not None else sub_frame
         t = time.perf_counter()
         with infer:
@@ -268,12 +293,14 @@ class Session(threading.Thread):
                 persons.append({"zone": z, "box": [round(v, 4) for v in box], "score": round(score, 3)})
         if not persons:
             return
+        # Someone in any zone: open (or keep) the HD stream, so it is ready by the time
+        # a person coming from the street is inside and facing the camera.
+        self.hd_until = time.time() + HD_LINGER
+        if main is None:
+            self.hd()
         faces = []
         if any(p["zone"] == "inside" for p in persons):
             self.last_inside = time.time()
-            if self.main is None:
-                self.main = Reader(self.main_name)  # faces from the next frames on
-                self.main.start()
             if hd is not None:
                 t = time.perf_counter()
                 with infer:
@@ -328,9 +355,11 @@ class Handler(BaseHTTPRequestHandler):
         if not self._authorized():
             return self._json(401, {"error": "unauthorized"})
         with sessions_lock:
-            active = [{"camera_id": s.camera_id, "seconds_left": round(s.until - time.time()), "hd": s.main is not None,
-                       "stream_error": s.sub.error} for s in sessions.values()]
-        self._json(200, {"sessions": active, "person_ms": avg(stats["person_ms"]), "face_ms": avg(stats["face_ms"]),
+            active = [{"camera_id": s.camera_id, "seconds_left": round(s.until - time.time()), "hd": time.time() < s.hd_until}
+                      for s in sessions.values()]
+        with readers_lock:
+            open_streams = {n: {"age": round(time.time() - r.at, 1) if r.at else None, "error": r.error} for n, r in readers.items()}
+        self._json(200, {"sessions": active, "streams": open_streams, "person_ms": avg(stats["person_ms"]), "face_ms": avg(stats["face_ms"]),
                          "reports": stats["reports"], "report_errors": stats["report_errors"], "last_error": stats["last_error"]})
 
     def do_POST(self):
@@ -366,6 +395,7 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     if not TOKEN or not RTSP:
         raise SystemExit("VISION_TOKEN and VISION_RTSP are required")
+    threading.Thread(target=reap, daemon=True).start()
     host, port = LISTEN.rsplit(":", 1)
     print(f"nvr-vision listening on {LISTEN}, {THREADS} threads, {SAMPLE_FPS} fps", flush=True)
     ThreadingHTTPServer((host, int(port)), Handler).serve_forever()
