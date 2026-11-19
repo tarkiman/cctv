@@ -180,3 +180,22 @@ func TestSPAFallback(t *testing.T) {
 		t.Fatal("missing CSP header")
 	}
 }
+
+func TestSnapshotIntervalSetting(t *testing.T) {
+	e := newEnv(t)
+	e.login(t)
+	for body, want := range map[string]int{
+		`{"snapshot_seconds":5}`:   http.StatusBadRequest,
+		`{"snapshot_seconds":601}`: http.StatusBadRequest,
+		`{"snapshot_seconds":30}`:  http.StatusOK,
+	} {
+		if r := e.do(t, "PUT", "/api/v1/settings", body, true); r.StatusCode != want {
+			t.Fatalf("%s: status %d, want %d", body, r.StatusCode, want)
+		}
+	}
+	var got map[string]int
+	r := e.do(t, "GET", "/api/v1/settings", "", false)
+	if err := json.NewDecoder(r.Body).Decode(&got); err != nil || got["snapshot_seconds"] != 30 {
+		t.Fatalf("settings = %v (%v)", got, err)
+	}
+}

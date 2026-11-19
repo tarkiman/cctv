@@ -163,7 +163,7 @@ terdekat.
 | `GET` | `/system/stats` | CPU, RAM, load, disk `/data`, ukuran rekaman per kamera, versi, jumlah tujuan notifikasi |
 | `POST` | `/system/notify-test` | Kirim pesan tes ke semua webhook notifikasi; `204`, `409` bila belum diatur, `502` bila gagal (admin) |
 | `GET` | `/settings` | Pengaturan global |
-| `PUT` | `/settings` | Ubah pengaturan global (admin) |
+| `PUT` | `/settings` | Ubah pengaturan global (admin). Kunci: `min_free_percent`, `timelapse_keep_days`, `timelapse_fps`, `snapshot_seconds` (10–600, interval snapshot = frame timelapse; default dari `NVR_SNAPSHOT_SECONDS`), `detect_fps`, `motion_threshold`, `motion_min_area` |
 | `GET/POST/PATCH/DELETE` | `/users[/{id}]` | Fase 2. Kelola pengguna (admin) |
 
 ## Push realtime — SSE

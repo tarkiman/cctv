@@ -1,4 +1,5 @@
-// Package snapshot grabs one keyframe per camera at a fixed interval. Decoding only
+// Package snapshot grabs one keyframe per camera at an interval set in Pengaturan
+// (snapshot_seconds); every snapshot is also that day's timelapse frame. Decoding only
 // keyframes (-skip_frame nokey) keeps the cost at one image per interval instead of a
 // continuous decode.
 package snapshot
@@ -20,10 +21,18 @@ import (
 type Snapshotter struct {
 	Tools    ffmpeg.Tools
 	Health   *health.Tracker
+	Settings *store.SettingStore
 	DataDir  string
 	Location *time.Location
-	Every    time.Duration
 	Log      *slog.Logger
+}
+
+// recheck is how often a wait re-reads the interval, so a change in Pengaturan applies
+// within seconds instead of after the old (up to 10 minute) interval.
+const recheck = 5 * time.Second
+
+func (s *Snapshotter) interval(ctx context.Context) time.Duration {
+	return time.Duration(s.Settings.Int(ctx, store.SettingSnapshotSeconds)) * time.Second
 }
 
 // LatestPath is where the newest snapshot of a camera is kept.
@@ -45,16 +54,22 @@ func (s *Snapshotter) RunCamera(ctx context.Context, cam store.Camera) {
 		return
 	case <-time.After(jitter):
 	}
-	t := time.NewTicker(s.Every)
-	defer t.Stop()
 	for {
+		last := time.Now()
 		if err := s.take(ctx, cam); err != nil && ctx.Err() == nil {
 			s.Log.Debug("snapshot failed", "camera", cam.Slug, "err", err)
 		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
+		// Wait until last + interval, re-reading the interval while waiting.
+		for {
+			left := time.Until(last.Add(s.interval(ctx)))
+			if left <= 0 {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(min(left, recheck)):
+			}
 		}
 	}
 }

@@ -12,6 +12,8 @@ const (
 	SettingMinFreePercent    = "min_free_percent"
 	SettingTimelapseKeepDays = "timelapse_keep_days"
 	SettingTimelapseFPS      = "timelapse_fps"
+	// Seconds between snapshots; each one is also a timelapse frame.
+	SettingSnapshotSeconds = "snapshot_seconds"
 	// Detection (applies to cameras with detection on). Frames analysed per second.
 	SettingDetectFPS = "detect_fps"
 	// Brightness change (0..255) for a picture cell to count as changed.
@@ -24,6 +26,7 @@ var settingDefaults = map[string]int{
 	SettingMinFreePercent:    10,
 	SettingTimelapseKeepDays: 3,
 	SettingTimelapseFPS:      24,
+	SettingSnapshotSeconds:   60, // replaced by NVR_SNAPSHOT_SECONDS at startup (OverrideDefault)
 	SettingDetectFPS:         2,
 	SettingMotionThreshold:   25,
 	SettingMotionMinArea:     15,
@@ -34,9 +37,23 @@ var SettingLimits = map[string][2]int{
 	SettingMinFreePercent:    {1, 50},
 	SettingTimelapseKeepDays: {0, 30},
 	SettingTimelapseFPS:      {1, 60},
+	SettingSnapshotSeconds:   {10, 600},
 	SettingDetectFPS:         {1, 5},
 	SettingMotionThreshold:   {8, 80},
 	SettingMotionMinArea:     {2, 300},
+}
+
+// OverrideDefault replaces a setting's default (clamped to its limits), e.g. with the
+// value from the environment, so the environment decides until the admin changes the
+// setting in the UI. Call it at startup, before the settings are read.
+func OverrideDefault(key string, value int) {
+	if _, ok := settingDefaults[key]; !ok {
+		return
+	}
+	if lim, ok := SettingLimits[key]; ok {
+		value = max(lim[0], min(lim[1], value))
+	}
+	settingDefaults[key] = value
 }
 
 type SettingStore struct{ db *sqlx.DB }
