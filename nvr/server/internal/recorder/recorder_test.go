@@ -78,7 +78,7 @@ func TestAudioBlock(t *testing.T) {
 }
 
 // TestRecordAndRemux runs the real recording and remux command lines on synthetic
-// sources shaped like the cameras: G.711 (bardi), Opus (c301) and video only.
+// sources shaped like the cameras: MP2, Opus (c301) and video only.
 func TestRecordAndRemux(t *testing.T) {
 	ff, err1 := exec.LookPath("ffmpeg")
 	fp, err2 := exec.LookPath("ffprobe")
@@ -93,17 +93,19 @@ func TestRecordAndRemux(t *testing.T) {
 		wallclock bool
 		wantAudio string
 	}{
-		{"alaw", []string{"-f", "lavfi", "-i", "sine=f=440:r=8000", "-c:a", "pcm_alaw"}, false, "aac"},
+		// MP2 (like cam1's); G.711 (bardi) can't be carried in this MPEG-TS test source.
+		{"mp2", []string{"-f", "lavfi", "-i", "sine=f=440:r=16000", "-c:a", "mp2"}, false, "aac"},
 		{"opus", []string{"-f", "lavfi", "-i", "sine=f=440:r=48000", "-c:a", "libopus", "-ac", "2"}, true, "aac"},
 		{"none", nil, false, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
-			src := filepath.Join(dir, "src.mkv")
+			// MPEG-TS like go2rtc's RTSP output (Annex B), which dump_extra expects.
+			src := filepath.Join(dir, "src.ts")
 			args := []string{"-f", "lavfi", "-i", "testsrc=size=320x240:rate=15"}
 			args = append(args, tc.audioIn...)
-			args = append(args, "-t", "4", "-c:v", "libx264", "-g", "15", "-pix_fmt", "yuv420p", "-y", src)
+			args = append(args, "-t", "4", "-c:v", "libx264", "-g", "15", "-pix_fmt", "yuv420p", "-f", "mpegts", "-y", src)
 			if err := tools.Run(ctx, args...); err != nil {
 				t.Skipf("cannot build source (%v)", err)
 			}
@@ -299,5 +301,17 @@ func TestSwitchToWallclock(t *testing.T) {
 	r.unregister(7, ru2)
 	if r.runs[7] != nil {
 		t.Fatal("unregister")
+	}
+}
+
+func TestRecordArgsRepeatParameterSets(t *testing.T) {
+	a := recordArgs("rtsp://127.0.0.1:8556/bardi", true, false, "/x", 600)
+	i := slices.Index(a, "-bsf:v")
+	if i < 0 || a[i+1] != "dump_extra=freq=keyframe" {
+		t.Fatalf("parameter sets not repeated on keyframes: %v", a)
+	}
+	if !unremuxableRe.MatchString("[out#0/mp4 @ 0x1] Could not write header (incorrect codec parameters ?): Invalid argument") ||
+		unremuxableRe.MatchString("No space left on device") {
+		t.Fatal("unremuxable classification")
 	}
 }

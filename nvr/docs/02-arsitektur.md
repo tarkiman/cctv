@@ -100,6 +100,13 @@ dengan `-use_wallclock_as_timestamps 1` (waktu kedatangan) sampai nvrd dimulai u
 jadi segmen berikutnya tidak rusak lagi. Ini bukan default karena waktu kedatangan lewat
 WiFi/relay sedikit tersendat (frame berdekatan).
 
+Parameter set (2026-11-19): perekam memakai `-bsf:v dump_extra=freq=keyframe` agar
+VPS/SPS/PPS diulang di setiap keyframe, jadi tiap segmen bisa di-decode sendiri. Sebelumnya
+`bardi` sesekali menghasilkan segmen tanpa parameter set ("dimensions not set") yang tidak
+bisa di-remux dan dicoba ulang setiap start. Kegagalan remux karena isi segmen (header
+tidak bisa ditulis, data tidak valid) kini memindahkan segmen ke karantina; kegagalan sistem
+(mis. disk penuh) tetap dicoba lagi.
+
 ### Snapshot & timelapse
 `ffmpeg -skip_frame nokey -i rtsp://127.0.0.1:8556/<stream> -frames:v 1 -vf scale=-2:480 <file>.jpg`
 — decoder hanya memproses keyframe, jadi biayanya satu gambar per menit, bukan 15 fps.
