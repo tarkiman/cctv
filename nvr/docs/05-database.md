@@ -130,6 +130,17 @@ CREATE TABLE events (
 );
 CREATE INDEX idx_events_camera_time ON events(camera_id, start_at);
 CREATE INDEX idx_events_time        ON events(start_at);
+
+-- 0006_zones.sql: zona deteksi per kamera (digambar di Pengaturan)
+CREATE TABLE camera_zones (
+    id         INTEGER PRIMARY KEY,
+    camera_id  INTEGER NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
+    kind       TEXT    NOT NULL CHECK (kind IN ('inside', 'outside')), -- dalam / depan pagar
+    name       TEXT    NOT NULL,
+    points     TEXT    NOT NULL,          -- JSON [[x,y],...] relatif 0..1, 3–32 titik
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+);
 ```
 
 ## Query penting

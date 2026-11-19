@@ -104,6 +104,8 @@ func (s *Server) Routes() http.Handler {
 					r.Post("/cameras/discover/ignore", s.ignoreDevice)
 					r.Get("/cameras/{id}/sources", s.cameraSources)
 					r.Put("/cameras/{id}/sources", s.putCameraSources)
+					r.Get("/cameras/{id}/zones", s.cameraZones)
+					r.Put("/cameras/{id}/zones", s.putCameraZones)
 					r.Delete("/cameras/{id}", s.deleteCamera)
 					r.Get("/system/status", s.systemStatus)
 					r.Get("/settings", s.getSettings)

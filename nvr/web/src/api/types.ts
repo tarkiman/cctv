@@ -239,3 +239,13 @@ export interface CameraDraft {
   sub: SourceInput | null
   mac?: string
 }
+
+export type ZoneKind = 'inside' | 'outside'
+
+/** Detection zone; points are [x, y] relative to the picture (0..1). */
+export interface Zone {
+  id?: number
+  kind: ZoneKind
+  name: string
+  points: [number, number][]
+}

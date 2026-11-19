@@ -136,6 +136,17 @@ menggambar bar.
 Export memakai ffmpeg `concat` + `-c copy` (tanpa transcode), dipotong di keyframe
 terdekat.
 
+## Zona deteksi
+
+| Method | Path | Keterangan |
+|---|---|---|
+| `GET` | `/cameras/{id}/zones` | `[{id, kind: "inside"\|"outside", name, points: [[x,y],...]}]` (admin) |
+| `PUT` | `/cameras/{id}/zones` | Ganti semua zona kamera; maks. 8 zona, 3–32 titik, koordinat 0..1. `[]` menghapus semua. Detektor memakainya dalam ±30 dtk tanpa restart (admin) |
+
+Bila kamera punya zona, gerakan di luar semua zona diabaikan (cell grid 4×4 px pada
+frame 320×180 yang titik tengahnya di dalam poligon). Perubahan gambar menyeluruh (IR
+siang/malam) tetap diukur di seluruh gambar.
+
 ## Event (fase 3)
 
 | Method | Path | Keterangan |

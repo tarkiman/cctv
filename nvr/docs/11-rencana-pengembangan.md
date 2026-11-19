@@ -233,3 +233,19 @@ Urut kira-kira dari manfaat terbesar:
   sesi Xiaomi, password kamera, webhook.
 - Fitur baru wajib: dokumen (`06-api`, `09-roadmap`, file ini) diperbarui di commit yang
   sama.
+
+## Tahap E — Pengenalan wajah & peringatan depan pagar (disetujui 2026-11-19)
+
+Kamera `bardi` (Teras), dua zona:
+- **Dalam pagar** — pengenalan wajah; notifikasi hanya untuk orang yang **dikenali**,
+  sekali per kunjungan (kunjungan selesai setelah 30 menit tidak terlihat).
+- **Depan pagar** — deteksi orang + lama berada; peringatan bila orang tak dikenal ada
+  ≥ 60 dtk dalam 3 menit, aktif 24 jam, jeda 15 menit.
+- Event mesin (`person_entered{name}`, `unknown_entered`, `loitering`) untuk asisten
+  virtual (suara xiaozhi) yang menyambut tamu / menegur orang mondar-mandir.
+
+Arsitektur: `umma` hanya gerbang gerak murah yang dibatasi zona; Raspberry Pi (decode
+HEVC hardware) menjalankan deteksi orang, deteksi & embedding wajah saat dipicu. Data
+wajah disimpan lokal. Urutan: (1) zona — selesai di PR ini; (2) layanan wajah/orang di
+Pi; (3) galeri wajah, notifikasi, event. Hasil uji kelayakan: S11 di `09-roadmap.md`.
+

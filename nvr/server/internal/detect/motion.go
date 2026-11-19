@@ -2,6 +2,8 @@
 // on small grayscale frames, which later decides when the person model runs.
 package detect
 
+import "github.com/tarkiman/cctv/nvr/server/internal/store"
+
 // Frame geometry fed by ffmpeg (-vf fps=N,scale=320:180,format=gray).
 const (
 	FrameW = 320
@@ -16,8 +18,10 @@ type Gate struct {
 	// MinArea is the fraction of changed cells (0..1) that counts as motion.
 	MinArea float64
 	// GlobalArea is the fraction above which the whole picture changed: a PTZ camera
-	// turning, or day/night (IR) switching.
+	// turning, or day/night (IR) switching. Measured over the whole picture.
 	GlobalArea float64
+	// Mask limits motion to the cells set (the camera's zones); nil = whole picture.
+	Mask []bool
 
 	prev   []int
 	cur    []int
@@ -53,24 +57,57 @@ func (g *Gate) Feed(frame []byte) Result {
 			g.cur[cy*cw+cx] = sum / (cell * cell)
 		}
 	}
-	changed := 0
-	if g.primed {
-		for i, v := range g.cur {
-			d := v - g.prev[i]
-			if d < 0 {
-				d = -d
-			}
-			if d > g.Threshold {
-				changed++
+	changed, changedIn, cells := 0, 0, 0
+	for i := range g.cur {
+		in := g.Mask == nil || g.Mask[i]
+		if in {
+			cells++
+		}
+		if !g.primed {
+			continue
+		}
+		d := g.cur[i] - g.prev[i]
+		if d < 0 {
+			d = -d
+		}
+		if d > g.Threshold {
+			changed++
+			if in {
+				changedIn++
 			}
 		}
 	}
 	g.prev, g.cur = g.cur, g.prev
 	g.primed = true
-	r := Result{Area: float64(changed) / float64(cw*ch)}
-	r.Global = r.Area >= g.GlobalArea
-	r.Motion = r.Area >= g.MinArea
+	var r Result
+	if cells > 0 {
+		r.Area = float64(changedIn) / float64(cells)
+	}
+	r.Global = float64(changed)/float64(cw*ch) >= g.GlobalArea
+	r.Motion = r.Area >= g.MinArea || r.Global
 	return r
+}
+
+// ZoneMask marks the gate cells whose centre lies in any of the zones; nil when there
+// are no zones (the whole picture counts).
+func ZoneMask(zones []store.Zone) []bool {
+	if len(zones) == 0 {
+		return nil
+	}
+	cw, ch := FrameW/cell, FrameH/cell
+	mask := make([]bool, cw*ch)
+	for cy := 0; cy < ch; cy++ {
+		for cx := 0; cx < cw; cx++ {
+			p := store.Point{(float64(cx) + 0.5) / float64(cw), (float64(cy) + 0.5) / float64(ch)}
+			for i := range zones {
+				if zones[i].Contains(p) {
+					mask[cy*cw+cx] = true
+					break
+				}
+			}
+		}
+	}
+	return mask
 }
 
 // Tracker turns per-frame results into motion events: an event starts after Confirm
