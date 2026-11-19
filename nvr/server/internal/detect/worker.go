@@ -82,6 +82,8 @@ func (w *Worker) RunCamera(ctx context.Context, cam store.Camera) error {
 	defer stall.Stop()
 
 	gate := NewGate(p.threshold, p.minArea)
+	zones, _ := w.Store.Zones.List(ctx, cam.ID)
+	gate.Mask = ZoneMask(zones)
 	tr := &Tracker{Confirm: 2, Quiet: 10 * p.fps} // ends after 10 s without motion
 	var (
 		eventID    int64
@@ -135,6 +137,9 @@ func (w *Worker) RunCamera(ctx context.Context, cam store.Camera) error {
 			recheck = now.Add(30 * time.Second)
 			np := w.params(ctx)
 			gate.Threshold, gate.MinArea = np.threshold, np.minArea
+			if zones, err := w.Store.Zones.List(ctx, cam.ID); err == nil {
+				gate.Mask = ZoneMask(zones) // zones drawn in Pengaturan apply live too
+			}
 			if np.fps != p.fps {
 				runErr = ErrSettingsChanged
 				cancel()

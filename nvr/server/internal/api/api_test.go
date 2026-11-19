@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -197,5 +198,31 @@ func TestSnapshotIntervalSetting(t *testing.T) {
 	r := e.do(t, "GET", "/api/v1/settings", "", false)
 	if err := json.NewDecoder(r.Body).Decode(&got); err != nil || got["snapshot_seconds"] != 30 {
 		t.Fatalf("settings = %v (%v)", got, err)
+	}
+}
+
+func TestCameraZones(t *testing.T) {
+	e := newEnv(t)
+	e.login(t)
+	path := fmt.Sprintf("/api/v1/cameras/%d/zones", e.camID)
+	good := `[{"kind":"inside","name":"Dalam pagar","points":[[0,0.6],[1,0.6],[1,1],[0,1]]},` +
+		`{"kind":"outside","name":"Depan pagar","points":[[0,0.2],[1,0.2],[1,0.55],[0,0.55]]}]`
+	for body, want := range map[string]int{
+		`[{"kind":"jalan","name":"x","points":[[0,0],[1,0],[1,1]]}]`:  http.StatusBadRequest,
+		`[{"kind":"inside","name":"x","points":[[0,0],[1,0]]}]`:       http.StatusBadRequest,
+		`[{"kind":"inside","name":"x","points":[[0,0],[2,0],[1,1]]}]`: http.StatusBadRequest,
+		good: http.StatusOK,
+	} {
+		if r := e.do(t, "PUT", path, body, true); r.StatusCode != want {
+			t.Fatalf("%s: status %d, want %d", body, r.StatusCode, want)
+		}
+	}
+	var zones []store.Zone
+	r := e.do(t, "GET", path, "", false)
+	if err := json.NewDecoder(r.Body).Decode(&zones); err != nil || len(zones) != 2 || zones[1].Kind != "outside" || len(zones[0].Points) != 4 {
+		t.Fatalf("zones = %+v (%v)", zones, err)
+	}
+	if r := e.do(t, "PUT", path, `[]`, true); r.StatusCode != http.StatusOK {
+		t.Fatalf("clearing zones: %d", r.StatusCode)
 	}
 }

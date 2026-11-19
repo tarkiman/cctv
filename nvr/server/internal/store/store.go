@@ -23,6 +23,7 @@ type Store struct {
 	Events     *EventStore
 	Locations  *LocationStore
 	Access     *AccessStore
+	Zones      *ZoneStore
 }
 
 func New(db *sqlx.DB) *Store {
@@ -36,6 +37,7 @@ func New(db *sqlx.DB) *Store {
 		Events:     &EventStore{db: db},
 		Locations:  &LocationStore{db: db},
 		Access:     &AccessStore{db: db},
+		Zones:      &ZoneStore{db: db},
 	}
 }
 

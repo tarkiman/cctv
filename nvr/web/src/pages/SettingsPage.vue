@@ -15,6 +15,7 @@ import LocationsSection from '../components/LocationsSection.vue'
 import AddCameraPanel from '../components/AddCameraPanel.vue'
 import DiscoverPanel from '../components/DiscoverPanel.vue'
 import CameraSourcesPanel from '../components/CameraSourcesPanel.vue'
+import ZoneEditor from '../components/ZoneEditor.vue'
 import DevicesSection from '../components/DevicesSection.vue'
 
 const auth = useAuth()
@@ -331,6 +332,7 @@ const input = 'w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm outl
               </button>
             </div>
           </form>
+          <ZoneEditor :camera="c" />
           <CameraSourcesPanel :camera="c" />
         </div>
       </div>

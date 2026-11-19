@@ -104,3 +104,22 @@ Pembanding: Frigate di mesin yang sama memakai 123–215% CPU dan 460–580 MB R
 - **Kapasitas disk jauh lebih longgar** dari perkiraan awal: bila angka siang hari mirip,
   3 kamera 24 jam hanya ~5–10 GB/hari, sehingga retensi 30 hari pun muat. Perlu diukur
   ulang di siang hari.
+
+### S11 — Pengenalan wajah & deteksi orang di Pi (2026-11-19)
+
+12 klip `bardi` (3 hari terakhir, 6 pagi + 6 sore/malam), diproses di Raspberry Pi 5:
+YOLOX-nano 416 (model `nvr-detect`) pada frame 640×360, lalu YuNet (deteksi wajah) +
+SFace (embedding) dari OpenCV Zoo pada potongan resolusi penuh.
+
+| Yang diukur | Hasil |
+|---|---|
+| Deteksi orang | Orang di dalam halaman dan di jalan depan pagar terdeteksi, juga sore hari; ±90 ms/frame, 1 thread Pi |
+| Wajah siang, dekat kamera | 75–190 px; YuNet 2–56 ms, SFace ±60 ms per wajah. Banyak yang menunduk/menyamping → perlu voting beberapa frame |
+| Wajah sore di pagar | 29–47 px, buram → tidak bisa dikenali; peringatan depan pagar harus berdasarkan perilaku |
+| Decode HEVC 2304×1296, klip 40 dtk | software ±9,5 dtk CPU; `-hwaccel drm` ±2 dtk CPU |
+| Beban Pi saat ada aktivitas | ±0,5 core; diam di luar kejadian |
+
+Temuan: sudut `bardi` berbeda antar klip karena auto-tracking PTZ menggerakkan kamera →
+dimatikan pengguna 2026-11-19; zona butuh sudut tetap. Satu positif palsu wajah
+(belakang kepala).
+

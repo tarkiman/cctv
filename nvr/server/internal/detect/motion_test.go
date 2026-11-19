@@ -1,6 +1,10 @@
 package detect
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/tarkiman/cctv/nvr/server/internal/store"
+)
 
 func frame(fill byte, rect func(x, y int) bool, v byte) []byte {
 	f := make([]byte, FrameW*FrameH)
@@ -72,5 +76,38 @@ func BenchmarkGate(b *testing.B) {
 		} else {
 			g.Feed(f2)
 		}
+	}
+}
+
+// TestZoneMask: with a zone over the bottom half (inside the fence), a blob in the top
+// half (the street) is ignored and the same blob in the bottom half is motion.
+func TestZoneMask(t *testing.T) {
+	inside := []store.Zone{{Kind: store.ZoneInside, Name: "Dalam pagar", Points: []store.Point{{0, 0.5}, {1, 0.5}, {1, 1}, {0, 1}}}}
+	mask := ZoneMask(inside)
+	n := 0
+	for _, in := range mask {
+		if in {
+			n++
+		}
+	}
+	if total := len(mask); n < total*45/100 || n > total*55/100 {
+		t.Fatalf("mask covers %d of %d cells, want about half", n, total)
+	}
+	if ZoneMask(nil) != nil {
+		t.Fatal("no zones must mean no mask")
+	}
+
+	blob := func(y0 int) []byte {
+		return frame(80, func(x, y int) bool { return x >= 100 && x < 140 && y >= y0 && y < y0+40 }, 200)
+	}
+	g := NewGate(25, 0.015)
+	g.Mask = mask
+	g.Feed(frame(80, nil, 0))
+	if r := g.Feed(blob(10)); r.Motion {
+		t.Fatalf("street blob counted: %+v", r)
+	}
+	g.Feed(frame(80, nil, 0))
+	if r := g.Feed(blob(120)); !r.Motion || r.Global {
+		t.Fatalf("blob inside the fence missed: %+v", r)
 	}
 }

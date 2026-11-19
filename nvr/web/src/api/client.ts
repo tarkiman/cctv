@@ -19,6 +19,7 @@ import type {
   User,
   UserItem,
   WorkerStatus,
+  Zone,
 } from './types'
 
 export class ApiError extends Error {
@@ -103,6 +104,8 @@ export const api = {
   probeCamera: (source: SourceInput, stream: 'main' | 'sub', cameraId?: number) =>
     request<ProbeResult>('POST', '/cameras/probe', { source, stream, camera_id: cameraId ?? 0 }),
   syncCameras: () => request<Camera[]>('POST', '/cameras/sync'),
+  cameraZones: (id: number) => request<Zone[]>('GET', `/cameras/${id}/zones`),
+  setCameraZones: (id: number, zones: Zone[]) => request<Zone[]>('PUT', `/cameras/${id}/zones`, zones),
   snapshotUrl: (id: number, bust?: string | number) => `/api/v1/cameras/${id}/snapshot.jpg${bust ? `?t=${bust}` : ''}`,
 
   events: (id: number, from: string, to: string) => request<CameraEvent[]>('GET', `/cameras/${id}/events?${q({ from, to })}`),
