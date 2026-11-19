@@ -161,6 +161,13 @@ func (t *Tracker) Handle(ctx context.Context, cam *store.Camera, r *Report) erro
 		}
 		best[p.Zone] = max(best[p.Zone], p.Score)
 	}
+	// A face is seen only inside the fence, so it also means someone is there (person
+	// detection flickers at night).
+	for _, f := range r.Faces {
+		if f.Zone == store.ZoneInside {
+			best[f.Zone] = max(best[f.Zone], f.Score)
+		}
+	}
 	for zone, score := range best {
 		if err := t.seen(ctx, cam.ID, zone, score, at); err != nil {
 			return err

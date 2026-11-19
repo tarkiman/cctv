@@ -43,7 +43,9 @@ RTSP = os.environ.get("VISION_RTSP", "").rstrip("/")  # rtsp://user:pass@nvr-hos
 CALLBACK = os.environ.get("VISION_CALLBACK", "")  # http://nvr-host:8091/api/v1/vision/report
 THREADS = int(os.environ.get("VISION_THREADS", "2"))
 SAMPLE_FPS = float(os.environ.get("VISION_FPS", "3"))
-PERSON_MIN = float(os.environ.get("VISION_PERSON_MIN", "0.45"))
+# Zones already limit where people count, so a lower score is safe; at night (spike of
+# 2026-11-20) people behind the gate scored 0.25-0.45 with YOLOX-nano.
+PERSON_MIN = float(os.environ.get("VISION_PERSON_MIN", "0.3"))
 FACE_MIN = float(os.environ.get("VISION_FACE_MIN", "0.6"))  # spike S11: real faces scored 0.61–0.91
 MODELS = os.environ.get("VISION_MODELS", "/models")
 MAX_SECONDS = 60
@@ -116,19 +118,22 @@ sface = cv2.FaceRecognizerSF.create(os.path.join(MODELS, "face_recognition_sface
 infer = threading.Lock()  # one model run at a time; the Pi is shared
 
 
-def faces_in(frame, box):
-    """Faces in the upper part of a person box (relative coords) of a full-res frame."""
+def faces_in_rect(frame, x1, y1, x2, y2, max_w=1280):
+    """Faces in a pixel rectangle of a full-res frame. Large rectangles are scaled down
+    to max_w for detection; alignment and the embedding use the full-res pixels."""
     H, W = frame.shape[:2]
-    x, y, w, h = box
-    x1, y1 = int(max(0, (x - w * 0.15) * W)), int(max(0, y * H))
-    x2, y2 = int(min(W, (x + w * 1.15) * W)), int(min(H, (y + h * 0.5) * H))
+    x1, y1, x2, y2 = max(0, int(x1)), max(0, int(y1)), min(W, int(x2)), min(H, int(y2))
     crop = frame[y1:y2, x1:x2]
     if crop.shape[0] < 24 or crop.shape[1] < 24:
         return []
-    yunet.setInputSize((crop.shape[1], crop.shape[0]))
-    _, found = yunet.detect(crop)
+    k = min(1.0, max_w / crop.shape[1])
+    det = cv2.resize(crop, (int(crop.shape[1] * k), int(crop.shape[0] * k))) if k < 1 else crop
+    yunet.setInputSize((det.shape[1], det.shape[0]))
+    _, found = yunet.detect(det)
     out = []
     for f in [] if found is None else found:
+        f = f.copy()
+        f[:14] /= k  # box + 5 landmarks back to full-res crop coordinates
         fw, fh = float(f[2]), float(f[3])
         if fh < 40:  # too small to recognise (see spike S11)
             continue
@@ -140,8 +145,8 @@ def faces_in(frame, box):
         fx2, fy2 = int(min(crop.shape[1], f[0] + fw + mx)), int(min(crop.shape[0], f[1] + fh + my))
         face = crop[fy1:fy2, fx1:fx2]
         if max(face.shape[:2]) > 256:
-            k = 256 / max(face.shape[:2])
-            face = cv2.resize(face, (int(face.shape[1] * k), int(face.shape[0] * k)))
+            r = 256 / max(face.shape[:2])
+            face = cv2.resize(face, (int(face.shape[1] * r), int(face.shape[0] * r)))
         jpeg = cv2.imencode(".jpg", face, [cv2.IMWRITE_JPEG_QUALITY, 88])[1].tobytes()
         out.append({
             "box": [round(float((x1 + f[0]) / W), 4), round(float((y1 + f[1]) / H), 4), round(fw / W, 4), round(fh / H, 4)],
@@ -151,6 +156,24 @@ def faces_in(frame, box):
             "jpeg": base64.b64encode(jpeg).decode(),
         })
     return out
+
+
+def faces_in(frame, box):
+    """Faces in the upper part of a person box (relative coords) of a full-res frame."""
+    H, W = frame.shape[:2]
+    x, y, w, h = box
+    return faces_in_rect(frame, (x - w * 0.15) * W, y * H, (x + w * 1.15) * W, (y + h * 0.5) * H)
+
+
+def inside_region(zones):
+    """Where faces of people inside the fence can be: the inside zones' bounding box,
+    extended upwards by a third of the picture (heads are above the feet). None when
+    the camera has no inside zone."""
+    pts = [p for z in zones if z["kind"] == "inside" for p in z["points"]]
+    if not pts:
+        return None
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    return max(0.0, min(xs)), max(0.0, min(ys) - 0.33), min(1.0, max(xs)), min(1.0, max(ys))
 
 
 # --- zones ----------------------------------------------------------------------------
@@ -245,7 +268,9 @@ class Session(threading.Thread):
         super().__init__(daemon=True)
         self.camera_id = req["camera_id"]
         self.update(req)
-        self.hd_until = 0.0  # keep the main stream open until then
+        # Keep the main stream open until then. Cameras with an inside zone open it right
+        # away: by the time a person is detected, the best face moments may be over.
+        self.hd_until = time.time() + HD_LINGER if inside_region(self.zones) else 0.0
         self.last_inside = 0.0
 
     def update(self, req):
@@ -291,26 +316,43 @@ class Session(threading.Thread):
             z = zone_of(self.zones, box)
             if z:
                 persons.append({"zone": z, "box": [round(v, 4) for v in box], "score": round(score, 3)})
-        if not persons:
-            return
-        # Someone in any zone: open (or keep) the HD stream, so it is ready by the time
-        # a person coming from the street is inside and facing the camera.
-        self.hd_until = time.time() + HD_LINGER
-        if main is None:
-            self.hd()
+        if persons:
+            # Someone in any zone: open (or keep) the HD stream, so it is ready by the
+            # time a person coming from the street is inside and facing the camera.
+            self.hd_until = time.time() + HD_LINGER
+            if main is None:
+                self.hd()
         faces = []
+        now = time.time()
         if any(p["zone"] == "inside" for p in persons):
-            self.last_inside = time.time()
-            if hd is not None:
-                t = time.perf_counter()
-                with infer:
-                    for p in persons:
-                        if p["zone"] == "inside":
-                            for f in faces_in(hd, p["box"]):
-                                f["zone"] = "inside"
-                                faces.append(f)
-                stats["face_ms"].append((time.perf_counter() - t) * 1000)
-        report({"camera_id": self.camera_id, "at": round(time.time(), 3), "persons": persons, "faces": faces})
+            self.last_inside = now
+        region = inside_region(self.zones)
+        if hd is not None and region is not None:
+            # Search the whole area where faces of people inside can be, not only the
+            # person boxes: at night detection flickers and walking blurs the body.
+            H, W = hd.shape[:2]
+            t = time.perf_counter()
+            with infer:
+                found = faces_in_rect(hd, region[0] * W, region[1] * H, region[2] * W, region[3] * H)
+            stats["face_ms"].append((time.perf_counter() - t) * 1000)
+            for f in found:
+                fx, fy, fw, fh = f["box"]
+                cx, cy = fx + fw / 2, fy + fh / 2
+                owner = [p["zone"] for p in persons if p["box"][0] <= cx <= p["box"][0] + p["box"][2] and
+                         p["box"][1] <= cy <= p["box"][1] + p["box"][3]]
+                # From this camera's angle a head outside the gate can look like it is
+                # above the inside zone, so the face's own position decides nothing: it
+                # counts when it belongs to someone inside, or (no box: detection
+                # flickers) when someone was inside a moment ago, never when it belongs
+                # to someone outside.
+                if "inside" in owner or (not owner and now - self.last_inside < 10):
+                    f["zone"] = "inside"
+                    faces.append(f)
+            if faces:  # a face inside counts as someone inside
+                self.last_inside = now
+                self.hd_until = now + HD_LINGER
+        if persons or faces:
+            report({"camera_id": self.camera_id, "at": round(time.time(), 3), "persons": persons, "faces": faces})
 
 
 def report(body):
