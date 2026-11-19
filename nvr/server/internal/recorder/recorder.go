@@ -91,6 +91,10 @@ const (
 var audioErrRe = regexp.MustCompile(`aist#|Decode error rate|Audio encoding failed|output stream 0:1|` +
 	`^\[(mp2|mp3\w*|aac|opus|pcm_\w+|adpcm_\w+|g72\d\w*) @`)
 
+// unremuxableRe matches remux errors caused by the segment's content rather than the
+// system (disk, permissions).
+var unremuxableRe = regexp.MustCompile(`Could not write header|dimensions not set|Invalid data found`)
+
 // recordArgs builds the ffmpeg command line for one recording run. wallclock replaces
 // the source timestamps with arrival time; it is used for Xiaomi sources, whose audio
 // timestamps from go2rtc advance far slower than real time.
@@ -102,7 +106,10 @@ func recordArgs(input string, audio, wallclock bool, incoming string, segmentSec
 	if strings.HasPrefix(input, "rtsp") {
 		args = append(args, "-rtsp_transport", "tcp")
 	}
-	args = append(args, "-fflags", "+genpts", "-i", input, "-map", "0:v", "-c:v", "copy")
+	// dump_extra repeats the codec parameter sets (VPS/SPS/PPS) on every keyframe, so
+	// each segment decodes on its own even when the camera sends them only once (seen on
+	// bardi: segments with "dimensions not set" that could never be remuxed).
+	args = append(args, "-fflags", "+genpts", "-i", input, "-map", "0:v", "-c:v", "copy", "-bsf:v", "dump_extra=freq=keyframe")
 	if audio {
 		args = append(args, "-map", "0:a:0?", "-af", "aresample=async=1",
 			"-c:a", "aac", "-ac", "1", "-ar", "16000", "-b:a", "32k")
@@ -482,7 +489,13 @@ func (r *Recorder) finalize(ctx context.Context, j job) error {
 	tmp := dst + ".tmp.mp4"
 	if err := r.Tools.Run(ctx, remuxArgs(j.tsPath, tmp, probe.Codec, fps)...); err != nil {
 		os.Remove(tmp)
-		return fmt.Errorf("remux: %w", err)
+		if unremuxableRe.MatchString(err.Error()) {
+			// The segment itself is broken (e.g. no codec parameters): retrying on every
+			// start would never succeed, so set it aside instead of leaving it queued.
+			r.quarantine(j.slug, j.tsPath)
+			return fmt.Errorf("remux failed, segment quarantined: %w", err)
+		}
+		return fmt.Errorf("remux: %w", err) // e.g. disk full: kept in .incoming, retried later
 	}
 	if err := os.Rename(tmp, dst); err != nil {
 		return err
