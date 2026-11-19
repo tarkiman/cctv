@@ -90,9 +90,11 @@ func run() error {
 		Location: cfg.Location, SegmentSeconds: cfg.SegmentSeconds, Log: log.With("component", "recorder"),
 	}
 	rec.Start(ctx)
+	// NVR_SNAPSHOT_SECONDS is only the starting value; the admin sets it in Pengaturan.
+	store.OverrideDefault(store.SettingSnapshotSeconds, int(cfg.SnapshotEvery/time.Second))
 	snap := &snapshot.Snapshotter{
-		Tools: tools, Health: tracker, DataDir: cfg.DataDir, Location: cfg.Location,
-		Every: cfg.SnapshotEvery, Log: log.With("component", "snapshot"),
+		Tools: tools, Health: tracker, Settings: st.Settings, DataDir: cfg.DataDir, Location: cfg.Location,
+		Log: log.With("component", "snapshot"),
 	}
 	mgr := &camera.Manager{
 		Store: st, Go2rtc: g2r, Health: tracker, Recorder: rec, Snapshotter: snap, DataDir: cfg.DataDir,

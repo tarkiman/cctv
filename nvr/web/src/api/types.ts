@@ -121,7 +121,13 @@ export interface WorkerStatus {
 }
 
 export type Settings = Record<
-  'min_free_percent' | 'timelapse_keep_days' | 'timelapse_fps' | 'detect_fps' | 'motion_threshold' | 'motion_min_area',
+  | 'min_free_percent'
+  | 'timelapse_keep_days'
+  | 'timelapse_fps'
+  | 'snapshot_seconds'
+  | 'detect_fps'
+  | 'motion_threshold'
+  | 'motion_min_area',
   number
 >
 

@@ -121,6 +121,16 @@ const estimate = computed(() => {
   return { bytes, usable }
 })
 
+// What the snapshot interval and fps give per camera per day.
+const timelapseEstimate = computed(() => {
+  const s = settings.value
+  if (!s || !(s.snapshot_seconds >= 10) || !(s.timelapse_fps >= 1)) return null
+  const frames = Math.floor(86400 / s.snapshot_seconds)
+  const secs = Math.round(frames / s.timelapse_fps)
+  const length = secs >= 60 ? `${Math.floor(secs / 60)} mnt${secs % 60 ? ` ${secs % 60} dtk` : ''}` : `${secs} dtk`
+  return { frames, length, cameras: cams.list.filter((c) => c.timelapse_enabled).length }
+})
+
 async function saveSettings() {
   if (!settings.value) return
   savingSettings.value = true
@@ -341,15 +351,33 @@ const input = 'w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm outl
             <input id="minfree" v-model.number="settings.min_free_percent" type="number" min="1" max="50" :class="input" />
             <p class="mt-1 text-xs text-muted">Di bawah ini, rekaman tertua dihapus otomatis.</p>
           </div>
+        </div>
+
+        <h3 class="mt-6 mb-1 text-sm font-semibold">Snapshot & timelapse</h3>
+        <p class="mb-3 text-xs text-muted">
+          Setiap snapshot (gambar terbaru di Live dan notifikasi) juga menjadi satu frame timelapse. Perubahan interval berlaku dalam beberapa detik, tanpa
+          restart.
+        </p>
+        <div class="grid gap-4 sm:grid-cols-3">
+          <div>
+            <label class="mb-1 block text-sm font-medium" for="snapsec">Ambil gambar setiap (detik)</label>
+            <input id="snapsec" v-model.number="settings.snapshot_seconds" type="number" min="10" max="600" step="5" :class="input" />
+            <p class="mt-1 text-xs text-muted">10–600. Makin kecil, timelapse makin halus dan snapshot makin segar.</p>
+          </div>
+          <div>
+            <label class="mb-1 block text-sm font-medium" for="tlfps">FPS video timelapse</label>
+            <input id="tlfps" v-model.number="settings.timelapse_fps" type="number" min="1" max="60" :class="input" />
+          </div>
           <div>
             <label class="mb-1 block text-sm font-medium" for="tlkeep">Simpan frame timelapse (hari)</label>
             <input id="tlkeep" v-model.number="settings.timelapse_keep_days" type="number" min="0" max="30" :class="input" />
           </div>
-          <div>
-            <label class="mb-1 block text-sm font-medium" for="tlfps">FPS timelapse</label>
-            <input id="tlfps" v-model.number="settings.timelapse_fps" type="number" min="1" max="60" :class="input" />
-          </div>
         </div>
+        <p v-if="timelapseEstimate" class="mt-3 rounded-lg bg-surface-2 p-3 text-sm" aria-live="polite">
+          ≈ <strong class="tabular">{{ timelapseEstimate.frames.toLocaleString('id-ID') }}</strong> frame per kamera per hari → video timelapse
+          <strong class="tabular">±{{ timelapseEstimate.length }}</strong> per hari
+          <span class="text-muted">({{ timelapseEstimate.cameras }} kamera dengan timelapse aktif)</span>.
+        </p>
 
         <h3 class="mt-6 mb-1 text-sm font-semibold">Deteksi</h3>
         <p class="mb-3 text-xs text-muted">

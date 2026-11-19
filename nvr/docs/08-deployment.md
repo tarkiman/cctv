@@ -135,7 +135,7 @@ Migrasi database hanya maju; sebelum rollback melewati migrasi baru, pulihkan
 | `NVR_ADMIN_USER` / `NVR_ADMIN_PASSWORD` | admin pertama, hanya dipakai bila belum ada user |
 | `NVR_GO2RTC_URL` / `NVR_GO2RTC_RTSP` | `http://127.0.0.1:1984` / `rtsp://127.0.0.1:8556` |
 | `NVR_TZ` | `Asia/Jakarta` |
-| `NVR_SEGMENT_SECONDS` / `NVR_SNAPSHOT_SECONDS` | `600` / `60` |
+| `NVR_SEGMENT_SECONDS` / `NVR_SNAPSHOT_SECONDS` | `600` / `60` (snapshot: hanya nilai awal; sejak 2026-11-19 diatur di Pengaturan → Snapshot & timelapse) |
 | `NVR_ALLOWED_ORIGINS` | `cctv.tarkiman.com` (origin WebSocket lewat proxy) |
 | `NVR_SECURE_COOKIE` | `false` (otomatis `Secure` lewat HTTPS) |
 | `NVR_NOTIFY_WEBHOOK` | URL webhook Discord (lihat di bawah) |
