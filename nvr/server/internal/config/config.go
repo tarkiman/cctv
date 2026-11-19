@@ -35,6 +35,10 @@ type Config struct {
 	NotifyOfflineAfter time.Duration
 	// Public base URL used for links in notifications, e.g. https://cctv.tarkiman.com.
 	PublicURL string
+	// nvr-vision (person + face analysis on another machine, Tahap E). Off when the URL
+	// is empty. The token authenticates both directions.
+	VisionURL   string
+	VisionToken string
 }
 
 func Load() (*Config, error) {
@@ -88,6 +92,11 @@ func Load() (*Config, error) {
 	}
 	c.NotifyOfflineAfter = time.Duration(mins) * time.Minute
 	c.PublicURL = strings.TrimRight(os.Getenv("NVR_PUBLIC_URL"), "/")
+	c.VisionURL = strings.TrimRight(os.Getenv("NVR_VISION_URL"), "/")
+	c.VisionToken = os.Getenv("NVR_VISION_TOKEN")
+	if c.VisionURL != "" && len(c.VisionToken) < 24 {
+		return nil, fmt.Errorf("NVR_VISION_TOKEN must be set (at least 24 characters) when NVR_VISION_URL is")
+	}
 	return c, nil
 }
 

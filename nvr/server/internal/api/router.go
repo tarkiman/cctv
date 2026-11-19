@@ -22,6 +22,7 @@ import (
 	"github.com/tarkiman/cctv/nvr/server/internal/sse"
 	"github.com/tarkiman/cctv/nvr/server/internal/store"
 	"github.com/tarkiman/cctv/nvr/server/internal/sysinfo"
+	"github.com/tarkiman/cctv/nvr/server/internal/vision"
 )
 
 type Server struct {
@@ -35,6 +36,7 @@ type Server struct {
 	Sys     *sysinfo.Sampler
 	Notify  *notify.Watcher
 	Export  *export.Exporter
+	Vision  *vision.Tracker // nil-safe: reports are refused when NVR_VISION_URL is unset
 	Tools   ffmpeg.Tools
 	Web     fs.FS
 	Version string
@@ -53,6 +55,8 @@ func (s *Server) Routes() http.Handler {
 			writeError(w, http.StatusForbidden, "csrf", "Permintaan ditolak (header CSRF tidak ada).")
 		}))
 		r.Get("/healthz", s.healthz)
+		// nvr-vision reports (bearer token, not a user session).
+		r.With(middleware.Timeout(15*time.Second)).Post("/vision/report", s.visionReport)
 		r.With(middleware.Timeout(15*time.Second)).Post("/auth/login", s.login)
 
 		r.Group(func(r chi.Router) {

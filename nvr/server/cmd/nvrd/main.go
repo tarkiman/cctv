@@ -35,6 +35,7 @@ import (
 	"github.com/tarkiman/cctv/nvr/server/internal/store"
 	"github.com/tarkiman/cctv/nvr/server/internal/sysinfo"
 	"github.com/tarkiman/cctv/nvr/server/internal/timelapse"
+	"github.com/tarkiman/cctv/nvr/server/internal/vision"
 	"github.com/tarkiman/cctv/nvr/server/web"
 )
 
@@ -96,9 +97,17 @@ func run() error {
 		Tools: tools, Health: tracker, Settings: st.Settings, DataDir: cfg.DataDir, Location: cfg.Location,
 		Log: log.With("component", "snapshot"),
 	}
+	var visionClient *vision.Client
+	visionTracker := &vision.Tracker{Store: st, DataDir: cfg.DataDir, Log: log.With("component", "vision"),
+		Quiet: 10 * time.Second, FaceEvery: time.Second}
+	if cfg.VisionURL != "" {
+		visionClient = vision.NewClient(cfg.VisionURL, cfg.VisionToken)
+		go visionTracker.Run(ctx)
+		log.Info("nvr-vision enabled", "url", cfg.VisionURL)
+	}
 	mgr := &camera.Manager{
 		Store: st, Go2rtc: g2r, Health: tracker, Recorder: rec, Snapshotter: snap, DataDir: cfg.DataDir,
-		Detector: &detect.Worker{Tools: tools, Store: st, Health: tracker, Log: log.With("component", "detect")},
+		Detector: &detect.Worker{Tools: tools, Store: st, Health: tracker, Vision: visionClient, Log: log.With("component", "detect")},
 		Log:      log.With("component", "cameras"),
 	}
 	mgr.Start(ctx)
@@ -124,7 +133,8 @@ func run() error {
 		Addr: cfg.Listen,
 		Handler: (&api.Server{
 			Config: cfg, Store: st, Auth: authSvc, Go2rtc: g2r, Health: tracker, Cameras: mgr,
-			Hub: hub, Sys: &sysinfo.Sampler{}, Notify: watcher, Export: export.New(tools, cfg.DataDir), Tools: tools, Web: web.FS(), Version: version, Log: log,
+			Vision: visionTracker,
+			Hub:    hub, Sys: &sysinfo.Sampler{}, Notify: watcher, Export: export.New(tools, cfg.DataDir), Tools: tools, Web: web.FS(), Version: version, Log: log,
 		}).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,

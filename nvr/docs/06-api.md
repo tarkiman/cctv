@@ -147,6 +147,12 @@ Bila kamera punya zona, gerakan di luar semua zona diabaikan (cell grid 4×4 px 
 frame 320×180 yang titik tengahnya di dalam poligon). Perubahan gambar menyeluruh (IR
 siang/malam) tetap diukur di seluruh gambar.
 
+## nvr-vision
+
+| Method | Path | Keterangan |
+|---|---|---|
+| `POST` | `/vision/report` | Dari nvr-vision, bukan browser: `Authorization: Bearer <NVR_VISION_TOKEN>` + header CSRF. `{camera_id, at, persons:[{zone, box, score}], faces:[{zone, box, score, size, embedding[128], jpeg(base64)}]}` → `204`. Membuka/memperpanjang event `person` per zona (ditutup setelah 10 dtk tanpa laporan) dan menyimpan maks. satu sampel wajah per kamera per detik |
+
 ## Event (fase 3)
 
 | Method | Path | Keterangan |

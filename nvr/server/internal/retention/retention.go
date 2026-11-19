@@ -88,6 +88,7 @@ func (j *Janitor) RunOnce(ctx context.Context) error {
 	}
 
 	j.pruneQuarantine(now)
+	j.pruneFaces(ctx, now)
 
 	n, err := j.enforceFreeSpace(ctx)
 	deleted += n
@@ -148,6 +149,23 @@ func (j *Janitor) remove(ctx context.Context, recs []store.Recording) (int, erro
 		n++
 	}
 	return n, nil
+}
+
+// FaceDays is how long unlabelled face samples (Tahap E) are kept.
+const FaceDays = 7
+
+func (j *Janitor) pruneFaces(ctx context.Context, now time.Time) {
+	paths, err := j.Store.Faces.DeleteUnlabeledBefore(ctx, now.Add(-FaceDays*24*time.Hour).UnixMilli())
+	if err != nil {
+		j.Log.Warn("prune face samples", "err", err)
+		return
+	}
+	for _, p := range paths {
+		os.Remove(filepath.Join(j.DataDir, p))
+	}
+	if len(paths) > 0 {
+		j.Log.Info("removed old face samples", "count", len(paths))
+	}
 }
 
 // QuarantineDays is how long broken segments set aside by the recorder are kept.

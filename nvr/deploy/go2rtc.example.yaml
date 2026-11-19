@@ -4,7 +4,13 @@
 api:
   listen: "127.0.0.1:1984"   # dashboard via SSH tunnel: ssh -L 1984:127.0.0.1:1984 umma
 rtsp:
+  # 127.0.0.1:8556 is enough for nvrd alone. With nvr-vision on another machine (Tahap
+  # E), listen on all interfaces with a login; go2rtc never asks loopback clients
+  # (nvrd) for it, so only nvr-vision uses it.
   listen: "127.0.0.1:8556"
+  # listen: ":8556"
+  # username: "vision"
+  # password: "LONG_RANDOM_PASSWORD"
 webrtc:
   listen: ":8557"
   candidates:
