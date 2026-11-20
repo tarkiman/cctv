@@ -25,6 +25,7 @@ type Store struct {
 	Access     *AccessStore
 	Zones      *ZoneStore
 	Faces      *FaceStore
+	People     *PeopleStore
 }
 
 func New(db *sqlx.DB) *Store {
@@ -40,6 +41,7 @@ func New(db *sqlx.DB) *Store {
 		Access:     &AccessStore{db: db},
 		Zones:      &ZoneStore{db: db},
 		Faces:      &FaceStore{db: db},
+		People:     &PeopleStore{db: db},
 	}
 }
 

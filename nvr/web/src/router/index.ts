@@ -18,6 +18,7 @@ export const router = createRouter({
     { path: '/camera/:slug', name: 'camera', component: () => import('../pages/CameraPage.vue'), meta: { title: 'Kamera' } },
     { path: '/timelapse', name: 'timelapse', component: () => import('../pages/TimelapsePage.vue'), meta: { title: 'Timelapse' } },
     { path: '/status', name: 'system', component: () => import('../pages/SystemPage.vue'), meta: { title: 'Status' } },
+    { path: '/wajah', name: 'faces', component: () => import('../pages/FacesPage.vue'), meta: { title: 'Wajah' } },
     { path: '/pengaturan', name: 'settings', component: () => import('../pages/SettingsPage.vue'), meta: { title: 'Pengaturan' } },
     { path: '/offline', name: 'offline', component: () => import('../pages/OfflinePage.vue'), meta: { public: true, bare: true, title: 'Offline' } },
     { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('../pages/NotFoundPage.vue'), meta: { title: 'Tidak ditemukan' } },

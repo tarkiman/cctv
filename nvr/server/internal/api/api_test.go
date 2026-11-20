@@ -265,3 +265,55 @@ func TestVisionReport(t *testing.T) {
 		t.Fatalf("person event = %+v", evs)
 	}
 }
+
+func TestFaceGallery(t *testing.T) {
+	e := newEnv(t)
+	e.login(t)
+	ctx := context.Background()
+	var ids []int64
+	for i := 0; i < 3; i++ {
+		v := make([]float32, 128)
+		v[0], v[1+i] = 1, 0.2
+		id, err := e.store.Faces.Insert(ctx, &store.FaceSample{CameraID: e.camID, At: int64(1000 + i), Zone: "inside", Path: "faces/x.jpg", Score: 0.8, Size: 90, Embedding: v})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+	}
+	var clusters []struct {
+		IDs   []int64 `json:"ids"`
+		Count int     `json:"count"`
+	}
+	r := e.do(t, "GET", "/api/v1/faces/clusters", "", false)
+	if err := json.NewDecoder(r.Body).Decode(&clusters); err != nil || len(clusters) != 1 || clusters[0].Count != 3 {
+		t.Fatalf("clusters = %+v (%v)", clusters, err)
+	}
+	body := fmt.Sprintf(`{"ids":[%d,%d],"name":"Ayah"}`, ids[0], ids[1])
+	if r := e.do(t, "POST", "/api/v1/faces/assign", body, true); r.StatusCode != 200 {
+		t.Fatalf("assign: %d", r.StatusCode)
+	}
+	var people []struct {
+		ID      int64  `json:"id"`
+		Name    string `json:"name"`
+		Samples int    `json:"samples"`
+		Notify  bool   `json:"notify"`
+	}
+	r = e.do(t, "GET", "/api/v1/people", "", false)
+	if err := json.NewDecoder(r.Body).Decode(&people); err != nil || len(people) != 1 || people[0].Samples != 2 || !people[0].Notify {
+		t.Fatalf("people = %+v (%v)", people, err)
+	}
+	pid := people[0].ID
+	if r := e.do(t, "PATCH", fmt.Sprintf("/api/v1/people/%d", pid), `{"notify":false,"name":"Bapak"}`, true); r.StatusCode != 200 {
+		t.Fatalf("update person: %d", r.StatusCode)
+	}
+	if r := e.do(t, "POST", "/api/v1/faces/delete", fmt.Sprintf(`{"ids":[%d]}`, ids[2]), true); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete face: %d", r.StatusCode)
+	}
+	if r := e.do(t, "DELETE", fmt.Sprintf("/api/v1/people/%d", pid), "", true); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete person: %d", r.StatusCode)
+	}
+	// Their samples are unlabelled again.
+	if n, _ := e.store.Faces.Unlabeled(ctx, 10); len(n) != 2 {
+		t.Fatalf("unlabelled after deleting the person: %d", len(n))
+	}
+}

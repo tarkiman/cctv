@@ -131,6 +131,14 @@ CREATE TABLE events (
 CREATE INDEX idx_events_camera_time ON events(camera_id, start_at);
 CREATE INDEX idx_events_time        ON events(start_at);
 
+-- 0008_people.sql: orang di galeri wajah; face_samples + match_id, match_score
+CREATE TABLE people (
+    id         INTEGER PRIMARY KEY,
+    name       TEXT    NOT NULL UNIQUE,
+    notify     INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL
+);
+
 -- 0007_vision.sql: events.zone ('inside'/'outside' untuk label 'person') dan sampel wajah
 CREATE TABLE face_samples (
     id        INTEGER PRIMARY KEY,

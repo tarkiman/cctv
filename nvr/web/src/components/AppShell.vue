@@ -1,20 +1,24 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { Activity, Film, History, Settings, Video, WifiOff, X } from 'lucide-vue-next'
+import { Activity, Film, History, ScanFace, Settings, Video, WifiOff, X } from 'lucide-vue-next'
 import { useCameras } from '../stores/cameras'
+import { useAuth } from '../stores/auth'
 import ToastHost from './ToastHost.vue'
 
 const route = useRoute()
 const cams = useCameras()
+const auth = useAuth()
 
-const nav = [
+const nav = computed(() => [
   { to: '/', name: 'live', label: 'Live', icon: Video },
   { to: '/rekaman', name: 'recordings', label: 'Rekaman', icon: History },
   { to: '/timelapse', name: 'timelapse', label: 'Timelapse', icon: Film },
+  // The face gallery is admin-only (biometric data).
+  ...(auth.user?.role === 'admin' ? [{ to: '/wajah', name: 'faces', label: 'Wajah', icon: ScanFace }] : []),
   { to: '/status', name: 'system', label: 'Status', icon: Activity },
   { to: '/pengaturan', name: 'settings', label: 'Pengaturan', icon: Settings },
-]
+])
 
 const isActive = (name: string) => route.name === name || (name === 'recordings' && route.name === 'camera')
 const bare = computed(() => route.meta.bare === true)
@@ -71,7 +75,8 @@ const bare = computed(() => route.meta.bare === true)
     <!-- Bottom navigation (phone) -->
     <nav
       v-if="!bare"
-      class="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+      class="fixed inset-x-0 bottom-0 z-40 grid border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+      :style="{ gridTemplateColumns: `repeat(${nav.length}, minmax(0, 1fr))` }"
       aria-label="Navigasi utama"
     >
       <RouterLink

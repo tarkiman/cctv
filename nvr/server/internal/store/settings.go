@@ -20,6 +20,19 @@ const (
 	SettingMotionThreshold = "motion_threshold"
 	// Changed area that counts as motion, in tenths of a percent (15 = 1.5%).
 	SettingMotionMinArea = "motion_min_area"
+
+	// Tahap E. Face similarity (×100, SFace cosine) to count as the same person.
+	SettingFaceMatch = "face_match"
+	// Notify when a known person arrives (1/0); a visit ends after this many minutes
+	// without seeing them.
+	SettingFaceNotify   = "face_notify"
+	SettingFaceVisitMin = "face_visit_min"
+	// Loitering: an unknown person in front of the fence for loiter_seconds within
+	// loiter_window seconds alerts (1/0), at most once per loiter_cooldown_min.
+	SettingLoiterNotify      = "loiter_notify"
+	SettingLoiterSeconds     = "loiter_seconds"
+	SettingLoiterWindow      = "loiter_window"
+	SettingLoiterCooldownMin = "loiter_cooldown_min"
 )
 
 var settingDefaults = map[string]int{
@@ -30,6 +43,17 @@ var settingDefaults = map[string]int{
 	SettingDetectFPS:         2,
 	SettingMotionThreshold:   25,
 	SettingMotionMinArea:     15,
+	// Spike S12 (2026-11-20): on bardi's high, downward view the same person's faces
+	// matched at only ~0.2-0.3 and different people up to ~0.6, so arrival
+	// notifications start off and need a clear match; enable them per installation once
+	// a camera sees faces at eye level.
+	SettingFaceMatch:         55,
+	SettingFaceNotify:        0,
+	SettingFaceVisitMin:      30,
+	SettingLoiterNotify:      1,
+	SettingLoiterSeconds:     60,
+	SettingLoiterWindow:      180,
+	SettingLoiterCooldownMin: 15,
 }
 
 // SettingLimits bounds each setting so the UI cannot store nonsense.
@@ -41,6 +65,13 @@ var SettingLimits = map[string][2]int{
 	SettingDetectFPS:         {1, 5},
 	SettingMotionThreshold:   {8, 80},
 	SettingMotionMinArea:     {2, 300},
+	SettingFaceMatch:         {25, 80},
+	SettingFaceNotify:        {0, 1},
+	SettingFaceVisitMin:      {5, 240},
+	SettingLoiterNotify:      {0, 1},
+	SettingLoiterSeconds:     {15, 600},
+	SettingLoiterWindow:      {60, 900},
+	SettingLoiterCooldownMin: {1, 240},
 }
 
 // OverrideDefault replaces a setting's default (clamped to its limits), e.g. with the

@@ -9,6 +9,6 @@ services:
     restart: unless-stopped
     ports: ["8093:8093"]
     env_file: .env
-    # The Pi is shared with other services: at most two cores and 600 MB.
+    # The Pi is shared with other services: at most two cores and 1 GB (450 MB seen with the HD stream open).
     cpus: ${VISION_CPUS:-2.0}
-    mem_limit: 600m
+    mem_limit: ${VISION_MEM:-1g}

@@ -20,6 +20,8 @@ import type {
   UserItem,
   WorkerStatus,
   Zone,
+  FaceCluster,
+  PersonItem,
 } from './types'
 
 export class ApiError extends Error {
@@ -104,6 +106,15 @@ export const api = {
   probeCamera: (source: SourceInput, stream: 'main' | 'sub', cameraId?: number) =>
     request<ProbeResult>('POST', '/cameras/probe', { source, stream, camera_id: cameraId ?? 0 }),
   syncCameras: () => request<Camera[]>('POST', '/cameras/sync'),
+  faceClusters: () => request<FaceCluster[]>('GET', '/faces/clusters'),
+  faceImageUrl: (id: number) => `/api/v1/faces/${id}/image`,
+  assignFaces: (ids: number[], target: { person_id?: number; name?: string }) =>
+    request<PersonItem[]>('POST', '/faces/assign', { ids, ...target }),
+  unassignFaces: (ids: number[]) => request<void>('POST', '/faces/unassign', { ids }),
+  deleteFaces: (ids: number[]) => request<void>('POST', '/faces/delete', { ids }),
+  people: () => request<PersonItem[]>('GET', '/people'),
+  updatePerson: (id: number, patch: { name?: string; notify?: boolean }) => request<PersonItem[]>('PATCH', `/people/${id}`, patch),
+  deletePerson: (id: number) => request<void>('DELETE', `/people/${id}`),
   cameraZones: (id: number) => request<Zone[]>('GET', `/cameras/${id}/zones`),
   setCameraZones: (id: number, zones: Zone[]) => request<Zone[]>('PUT', `/cameras/${id}/zones`, zones),
   snapshotUrl: (id: number, bust?: string | number) => `/api/v1/cameras/${id}/snapshot.jpg${bust ? `?t=${bust}` : ''}`,

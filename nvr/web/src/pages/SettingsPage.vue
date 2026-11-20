@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { CircleCheck, Download, LoaderCircle, LogOut, Plus, Radar, RefreshCw, Share } from 'lucide-vue-next'
 import { api, ApiError } from '../api/client'
 import type { Camera, CameraDraft, Settings, SystemStats } from '../api/types'
@@ -121,6 +121,18 @@ const estimate = computed(() => {
   const usable = stats.value.host.disk_free + stats.value.cameras.reduce((n, u) => n + u.bytes, 0)
   return { bytes, usable }
 })
+
+// 1/0 settings shown as checkboxes.
+function flag(key: 'face_notify' | 'loiter_notify') {
+  return computed({
+    get: () => settings.value?.[key] === 1,
+    set: (on: boolean) => {
+      if (settings.value) settings.value[key] = on ? 1 : 0
+    },
+  })
+}
+const faceNotify = flag('face_notify')
+const loiterNotify = flag('loiter_notify')
 
 // What the snapshot interval and fps give per camera per day.
 const timelapseEstimate = computed(() => {
@@ -380,6 +392,51 @@ const input = 'w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm outl
           <strong class="tabular">±{{ timelapseEstimate.length }}</strong> per hari
           <span class="text-muted">({{ timelapseEstimate.cameras }} kamera dengan timelapse aktif)</span>.
         </p>
+
+        <h3 class="mt-6 mb-1 text-sm font-semibold">Pengenalan wajah &amp; depan pagar</h3>
+        <p class="mb-3 text-xs text-muted">
+          Berlaku untuk kamera yang punya zona dan nvr-vision aktif. Notifikasi dikirim ke webhook yang sama dengan peringatan kamera (Discord).
+          Beri nama wajah di halaman <RouterLink to="/wajah" class="font-semibold underline">Wajah</RouterLink>.
+        </p>
+        <div class="grid gap-4 sm:grid-cols-3">
+          <label class="flex items-start justify-between gap-3 text-sm sm:col-span-3">
+            <span>
+              Beri tahu saat orang dikenal masuk rumah
+              <span class="block text-xs text-muted">Sekali per kunjungan; bisa dimatikan per orang di halaman Wajah.</span>
+            </span>
+            <input v-model="faceNotify" type="checkbox" class="mt-0.5 size-5 shrink-0 accent-[var(--primary)]" />
+          </label>
+          <div>
+            <label class="mb-1 block text-sm font-medium" for="fmatch">Kemiripan wajah minimal (%)</label>
+            <input id="fmatch" v-model.number="settings.face_match" type="number" min="25" max="80" :class="input" />
+            <p class="mt-1 text-xs text-muted">25–80. Naikkan bila ada orang yang salah dikenali.</p>
+          </div>
+          <div>
+            <label class="mb-1 block text-sm font-medium" for="fvisit">Kunjungan baru setelah (menit)</label>
+            <input id="fvisit" v-model.number="settings.face_visit_min" type="number" min="5" max="240" :class="input" />
+            <p class="mt-1 text-xs text-muted">Tidak terlihat selama ini = kedatangan berikutnya diberitahukan lagi.</p>
+          </div>
+          <div class="hidden sm:block" />
+          <label class="flex items-start justify-between gap-3 text-sm sm:col-span-3">
+            <span>
+              Peringatan orang tak dikenal mondar-mandir di depan pagar
+              <span class="block text-xs text-muted">Tidak dikirim bila ada orang dikenal di sekitar (mis. keluarga sedang di gerbang).</span>
+            </span>
+            <input v-model="loiterNotify" type="checkbox" class="mt-0.5 size-5 shrink-0 accent-[var(--primary)]" />
+          </label>
+          <div>
+            <label class="mb-1 block text-sm font-medium" for="lsec">Lama berada (detik)</label>
+            <input id="lsec" v-model.number="settings.loiter_seconds" type="number" min="15" max="600" :class="input" />
+          </div>
+          <div>
+            <label class="mb-1 block text-sm font-medium" for="lwin">Dalam rentang (detik)</label>
+            <input id="lwin" v-model.number="settings.loiter_window" type="number" min="60" max="900" :class="input" />
+          </div>
+          <div>
+            <label class="mb-1 block text-sm font-medium" for="lcool">Jeda antar-peringatan (menit)</label>
+            <input id="lcool" v-model.number="settings.loiter_cooldown_min" type="number" min="1" max="240" :class="input" />
+          </div>
+        </div>
 
         <h3 class="mt-6 mb-1 text-sm font-semibold">Deteksi</h3>
         <p class="mb-3 text-xs text-muted">

@@ -157,3 +157,15 @@ dibatalkan tidak dihapus, cukup ditandai **Diganti oleh Dn**.
   menjadi bagian sistem produksi (dibatasi 2 core/600 MB). Decode HEVC di container
   memakai software (decoder hardware Pi tidak tersedia di image Debian); dipakai hanya
   selama ada orang di dalam pagar. Belum ada notifikasi — langkah 3.
+
+## D16. Notifikasi nama mati secara default; mondar-mandir berbasis orang
+- **Konteks:** spike S12 — di sudut `bardi` (tinggi, menghadap ke bawah) wajah orang yang
+  sama hanya mirip ±0,2–0,3, orang berbeda bisa ±0,6, untuk SFace maupun ArcFace.
+- **Keputusan:** galeri wajah dan pencocokan tetap ada, tetapi `face_notify` = 0 dan
+  `face_match` = 55 secara default; kedatangan diumumkan hanya dengan 2 kecocokan dalam
+  20 dtk atau satu kecocokan jelas (+10). Peringatan mondar-mandir memakai deteksi orang di
+  zona depan (celah ≤ 6 dtk digabung), tidak dikirim bila orang dikenal terlihat dalam
+  rentang yang sama.
+- **Konsekuensi:** pengenalan nama baru layak dengan kamera setinggi mata di jalur masuk;
+  saat itu cukup nyalakan `face_notify`. Event dikirim ke webhook yang sama (Discord, atau
+  JSON generik untuk asisten).
