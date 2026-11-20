@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -214,5 +215,17 @@ func TestWatcherLocationOutage(t *testing.T) {
 	}
 	if got.msgs[0].Title != "📡 Lokasi Rumah Ibu tidak terjangkau" || got.msgs[1].Level != Warning {
 		t.Fatalf("messages = %+v", got.msgs[:2])
+	}
+}
+
+func TestSendErrorHidesWebhookToken(t *testing.T) {
+	var buf bytes.Buffer
+	n := New([]string{"http://127.0.0.1:1/api/webhooks/123/SECRET-TOKEN"}, nil, "", slog.New(slog.NewTextHandler(&buf, nil)))
+	n.Client.Timeout = time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	err := n.Send(ctx, Message{Kind: "test", Title: "x"})
+	if err == nil || strings.Contains(err.Error(), "SECRET-TOKEN") || strings.Contains(buf.String(), "SECRET-TOKEN") {
+		t.Fatalf("token leaked: err=%v log=%s", err, buf.String())
 	}
 }

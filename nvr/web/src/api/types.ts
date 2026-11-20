@@ -127,7 +127,14 @@ export type Settings = Record<
   | 'snapshot_seconds'
   | 'detect_fps'
   | 'motion_threshold'
-  | 'motion_min_area',
+  | 'motion_min_area'
+  | 'face_match'
+  | 'face_notify'
+  | 'face_visit_min'
+  | 'loiter_notify'
+  | 'loiter_seconds'
+  | 'loiter_window'
+  | 'loiter_cooldown_min',
   number
 >
 
@@ -248,4 +255,25 @@ export interface Zone {
   kind: ZoneKind
   name: string
   points: [number, number][]
+}
+
+/** Unlabelled faces that look alike (face gallery). Times are unix ms. */
+export interface FaceCluster {
+  ids: number[]
+  preview: number[]
+  count: number
+  first_at: number
+  last_at: number
+  suggestion?: { person_id: number; name: string; score: number }
+}
+
+export interface PersonItem {
+  id: number
+  name: string
+  notify: boolean
+  created_at: number
+  samples: number
+  preview: number[]
+  /** Unix ms of the last time recognition matched this person. */
+  last_seen?: number
 }

@@ -83,8 +83,10 @@ func (n *Notifier) Send(ctx context.Context, m Message) error {
 	var errs []error
 	for _, u := range n.URLs {
 		if err := n.post(ctx, u, m); err != nil {
-			n.Log.Warn("notification failed", "kind", m.Kind, "target", redact(u), "err", err)
-			errs = append(errs, fmt.Errorf("%s: %w", redact(u), err))
+			// HTTP client errors quote the URL, and a webhook URL carries its token.
+			msg := strings.ReplaceAll(err.Error(), u, redact(u))
+			n.Log.Warn("notification failed", "kind", m.Kind, "target", redact(u), "err", msg)
+			errs = append(errs, fmt.Errorf("%s: %s", redact(u), msg))
 		}
 	}
 	return errors.Join(errs...)

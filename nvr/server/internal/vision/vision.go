@@ -8,6 +8,7 @@ package vision
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tarkiman/cctv/nvr/server/internal/notify"
 	"github.com/tarkiman/cctv/nvr/server/internal/store"
 )
 
@@ -94,10 +96,19 @@ type Tracker struct {
 	Quiet time.Duration
 	// Minimum time between stored face samples of one camera.
 	FaceEvery time.Duration
+	// Arrival and loitering notifications (nil-safe); PublicURL for their links.
+	Notifier  *notify.Notifier
+	PublicURL string
+	// Now is the clock (tests replace it); nil = time.Now.
+	Now func() time.Time
 
-	mu       sync.Mutex
-	open     map[key]*presence
-	lastFace map[int64]time.Time
+	mu        sync.Mutex
+	open      map[key]*presence
+	lastFace  map[int64]time.Time
+	gallery   *gallery
+	visits    map[int64]*visit // person -> current visit
+	loiters   map[int64]*loiter
+	lastKnown time.Time // last time any known person was recognised
 }
 
 type key struct {
@@ -150,9 +161,13 @@ func (t *Tracker) closeAll(now time.Time) {
 
 // Handle records one report for a known camera.
 func (t *Tracker) Handle(ctx context.Context, cam *store.Camera, r *Report) error {
+	now := time.Now()
+	if t.Now != nil {
+		now = t.Now()
+	}
 	at := time.UnixMilli(int64(r.At * 1000))
-	if at.IsZero() || time.Since(at) > time.Minute || time.Until(at) > time.Minute {
-		at = time.Now() // clocks of the two machines disagree: trust ours
+	if d := now.Sub(at); d > time.Minute || d < -time.Minute {
+		at = now // clocks of the two machines disagree: trust ours
 	}
 	best := map[string]float64{}
 	for _, p := range r.Persons {
@@ -173,7 +188,30 @@ func (t *Tracker) Handle(ctx context.Context, cam *store.Camera, r *Report) erro
 			return err
 		}
 	}
-	return t.saveFace(ctx, cam, r.Faces, at)
+	settings, err := t.Store.Settings.All(ctx)
+	if err != nil {
+		return err
+	}
+	if _, ok := best[store.ZoneOutside]; ok {
+		t.outside(cam, at, settings)
+	}
+	f := bestFace(r.Faces)
+	if f == nil {
+		return nil
+	}
+	matchID, matchScore := t.recognize(ctx, cam, f, at, settings)
+	return t.saveFace(ctx, cam, f, at, matchID, matchScore)
+}
+
+// bestFace picks the clearest face of a report (score × size).
+func bestFace(faces []FaceHit) *FaceHit {
+	var f *FaceHit
+	for i := range faces {
+		if len(faces[i].Embedding) == 128 && (f == nil || faces[i].Score*float64(faces[i].Size) > f.Score*float64(f.Size)) {
+			f = &faces[i]
+		}
+	}
+	return f
 }
 
 func (t *Tracker) seen(ctx context.Context, cameraID int64, zone string, score float64, at time.Time) error {
@@ -199,16 +237,7 @@ func (t *Tracker) seen(ctx context.Context, cameraID int64, zone string, score f
 	return nil
 }
 
-func (t *Tracker) saveFace(ctx context.Context, cam *store.Camera, faces []FaceHit, at time.Time) error {
-	var f *FaceHit
-	for i := range faces {
-		if len(faces[i].Embedding) == 128 && (f == nil || faces[i].Score*float64(faces[i].Size) > f.Score*float64(f.Size)) {
-			f = &faces[i]
-		}
-	}
-	if f == nil {
-		return nil
-	}
+func (t *Tracker) saveFace(ctx context.Context, cam *store.Camera, f *FaceHit, at time.Time, matchID int64, matchScore float64) error {
 	t.mu.Lock()
 	if t.lastFace == nil {
 		t.lastFace = map[int64]time.Time{}
@@ -234,6 +263,8 @@ func (t *Tracker) saveFace(ctx context.Context, cam *store.Camera, faces []FaceH
 	}
 	_, err = t.Store.Faces.Insert(ctx, &store.FaceSample{
 		CameraID: cam.ID, At: at.UnixMilli(), Zone: f.Zone, Path: rel, Score: f.Score, Size: f.Size, Embedding: f.Embedding,
+		MatchID:    sql.NullInt64{Int64: matchID, Valid: matchID != 0},
+		MatchScore: sql.NullFloat64{Float64: matchScore, Valid: matchID != 0},
 	})
 	return err
 }

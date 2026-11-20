@@ -123,3 +123,21 @@ Temuan: sudut `bardi` berbeda antar klip karena auto-tracking PTZ menggerakkan k
 dimatikan pengguna 2026-11-19; zona butuh sudut tetap. Satu positif palsu wajah
 (belakang kepala).
 
+### S12 — Akurasi pengenalan wajah di `bardi` (2026-11-20)
+
+38 sampel wajah asli (00:30–09:44, ±5 orang). Kemiripan foto berurutan (≤ 2,5 dtk, orang
+yang sama) dibanding pasangan antar-kunjungan:
+
+| Model | Sama (median) | Antar-kunjungan (median / maks) | Waktu |
+|---|---|---|---|
+| SFace (dipakai) | 0,21–0,32 | 0,12–0,20 / 0,55–0,64 | ±60 ms |
+| ArcFace MobileFaceNet (`w600k_mbf`) | 0,22 | 0,15 / 0,58 | ±90 ms |
+| ArcFace ResNet50 (`w600k_r50`) | 0,32 | 0,15 / 0,61 | ±970 ms |
+
+Sebaran bertumpuk untuk ketiga model: kamera tinggi menangkap wajah dari atas (menunduk/
+menyamping), hanya 5 dari 30 yang cukup frontal. Kesimpulan: identitas dari sudut ini
+tidak andal → notifikasi nama **mati secara default** (ambang 55%), galeri tetap
+mengumpulkan wajah. Butuh kamera setinggi mata di jalur masuk untuk pengenalan yang andal.
+Peringatan mondar-mandir (berbasis orang, bukan wajah) disimulasikan pada 79 event depan
+pagar hari itu: 0 peringatan pada 60/90/120 dtk — tidak mengganggu lalu-lintas biasa.
+

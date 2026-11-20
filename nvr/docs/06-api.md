@@ -153,6 +153,20 @@ siang/malam) tetap diukur di seluruh gambar.
 |---|---|---|
 | `POST` | `/vision/report` | Dari nvr-vision, bukan browser: `Authorization: Bearer <NVR_VISION_TOKEN>` + header CSRF. `{camera_id, at, persons:[{zone, box, score}], faces:[{zone, box, score, size, embedding[128], jpeg(base64)}]}` → `204`. Membuka/memperpanjang event `person` per zona (ditutup setelah 10 dtk tanpa laporan) dan menyimpan maks. satu sampel wajah per kamera per detik |
 
+## Wajah & orang (admin, Tahap E)
+
+| Method | Path | Keterangan |
+|---|---|---|
+| `GET` | `/faces/clusters` | Sampel wajah tanpa nama, dikelompokkan berdasarkan kemiripan (≥ 0,45): `[{ids, preview, count, first_at, last_at, suggestion?:{person_id, name, score}}]` |
+| `GET` | `/faces/{id}/image` | JPEG potongan wajah |
+| `POST` | `/faces/assign` | `{ids, person_id}` atau `{ids, name}` (orang dibuat bila belum ada) → daftar orang |
+| `POST` | `/faces/unassign` · `/faces/delete` | `{ids}` lepaskan label · hapus sampel (beserta file) |
+| `GET` | `/people` | `[{id, name, notify, samples, preview, last_seen}]` |
+| `PATCH` · `DELETE` | `/people/{id}` | `{name?, notify?}` · hapus (sampelnya kembali tanpa nama) |
+
+Pengaturan terkait (`PUT /settings`): `face_notify`, `face_match` (×100), `face_visit_min`,
+`loiter_notify`, `loiter_seconds`, `loiter_window`, `loiter_cooldown_min`.
+
 ## Event (fase 3)
 
 | Method | Path | Keterangan |
