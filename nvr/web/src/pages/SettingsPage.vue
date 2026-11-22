@@ -123,7 +123,7 @@ const estimate = computed(() => {
 })
 
 // 1/0 settings shown as checkboxes.
-function flag(key: 'face_notify' | 'loiter_notify') {
+function flag(key: 'face_notify' | 'loiter_notify' | 'assistant_greet') {
   return computed({
     get: () => settings.value?.[key] === 1,
     set: (on: boolean) => {
@@ -133,6 +133,7 @@ function flag(key: 'face_notify' | 'loiter_notify') {
 }
 const faceNotify = flag('face_notify')
 const loiterNotify = flag('loiter_notify')
+const assistantGreet = flag('assistant_greet')
 
 // What the snapshot interval and fps give per camera per day.
 const timelapseEstimate = computed(() => {
@@ -435,6 +436,25 @@ const input = 'w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm outl
           <div>
             <label class="mb-1 block text-sm font-medium" for="lcool">Jeda antar-peringatan (menit)</label>
             <input id="lcool" v-model.number="settings.loiter_cooldown_min" type="number" min="1" max="240" :class="input" />
+          </div>
+          <label class="flex items-start justify-between gap-3 text-sm sm:col-span-3">
+            <span>
+              Asisten rumah (Echa) menyapa di pintu
+              <span class="block text-xs text-muted">
+                Orang dikenal disapa dengan namanya; orang tak dikenal yang berdiri di gerbang ditanya keperluannya. Aktif bila NVR_ASSISTANT_URL
+                diisi.
+              </span>
+            </span>
+            <input v-model="assistantGreet" type="checkbox" class="mt-0.5 size-5 shrink-0 accent-[var(--primary)]" />
+          </label>
+          <div>
+            <label class="mb-1 block text-sm font-medium" for="vsec">Tanya tamu setelah berdiri (detik)</label>
+            <input id="vsec" v-model.number="settings.visitor_seconds" type="number" min="5" max="120" :class="input" />
+            <p class="mt-1 text-xs text-muted">Dalam satu menit terakhir; orang yang sekadar lewat tidak ditanya.</p>
+          </div>
+          <div>
+            <label class="mb-1 block text-sm font-medium" for="vcool">Jeda antar-pertanyaan (menit)</label>
+            <input id="vcool" v-model.number="settings.visitor_cooldown_min" type="number" min="1" max="120" :class="input" />
           </div>
         </div>
 

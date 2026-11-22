@@ -39,6 +39,9 @@ type Config struct {
 	// is empty. The token authenticates both directions.
 	VisionURL   string
 	VisionToken string
+	// Home voice assistant (kawan-bridge POST /cctv, token in the URL): door greetings
+	// and visitors at the gate. Off when empty.
+	AssistantURL string
 }
 
 func Load() (*Config, error) {
@@ -94,6 +97,7 @@ func Load() (*Config, error) {
 	c.PublicURL = strings.TrimRight(os.Getenv("NVR_PUBLIC_URL"), "/")
 	c.VisionURL = strings.TrimRight(os.Getenv("NVR_VISION_URL"), "/")
 	c.VisionToken = os.Getenv("NVR_VISION_TOKEN")
+	c.AssistantURL = strings.TrimSpace(os.Getenv("NVR_ASSISTANT_URL"))
 	if c.VisionURL != "" && len(c.VisionToken) < 24 {
 		return nil, fmt.Errorf("NVR_VISION_TOKEN must be set (at least 24 characters) when NVR_VISION_URL is")
 	}

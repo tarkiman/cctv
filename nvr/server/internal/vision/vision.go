@@ -99,6 +99,8 @@ type Tracker struct {
 	// Arrival and loitering notifications (nil-safe); PublicURL for their links.
 	Notifier  *notify.Notifier
 	PublicURL string
+	// Assistant gets door events (greetings, visitors at the gate); nil = off.
+	Assistant *Assistant
 	// Now is the clock (tests replace it); nil = time.Now.
 	Now func() time.Time
 

@@ -110,8 +110,9 @@ type visit struct {
 }
 
 type loiter struct {
-	spans     [][2]time.Time // merged periods with someone outside
-	lastAlert time.Time
+	spans       [][2]time.Time // merged periods with someone outside
+	lastAlert   time.Time
+	lastVisitor time.Time // last time the assistant asked a stranger at the gate
 }
 
 // recognize matches the report's best face and handles arrivals. It returns the match
@@ -159,6 +160,10 @@ func (t *Tracker) recognize(ctx context.Context, cam *store.Camera, f *FaceHit, 
 		t.Log.Info("known person arrived", "person", person.Name, "camera", cam.Slug, "score", math.Round(score*100)/100)
 		if person.Notify && settings[store.SettingFaceNotify] == 1 {
 			t.notifyArrival(cam, person, score, f, at)
+		}
+		if person.Notify && settings[store.SettingAssistantGreet] == 1 {
+			t.Assistant.Send(AssistantEvent{Kind: "person_arrived", Camera: cam.Name, Name: person.Name,
+				Score: math.Round(score*100) / 100, At: at.UTC()})
 		}
 	}
 	return id, score
@@ -222,7 +227,7 @@ func (t *Tracker) outside(cam *store.Camera, at time.Time, settings map[string]i
 		l.spans = append(l.spans, [2]time.Time{at, at})
 	}
 	keep := l.spans[:0]
-	var dwell time.Duration
+	var dwell, recent time.Duration
 	for _, s := range l.spans {
 		if at.Sub(s[1]) > window {
 			continue
@@ -232,15 +237,34 @@ func (t *Tracker) outside(cam *store.Camera, at time.Time, settings map[string]i
 		}
 		keep = append(keep, s)
 		dwell += max(s[1].Sub(s[0]), time.Second)
+		// The last minute alone, for "someone is standing at the gate now".
+		if at.Sub(s[1]) <= time.Minute {
+			from := s[0]
+			if from.Before(at.Add(-time.Minute)) {
+				from = at.Add(-time.Minute)
+			}
+			recent += max(s[1].Sub(from), time.Second)
+		}
 	}
 	l.spans = keep
 	known := !t.lastKnown.IsZero() && at.Sub(t.lastKnown) <= window
+	visitor := t.Assistant != nil && !known && settings[store.SettingVisitorSeconds] > 0 &&
+		recent >= time.Duration(settings[store.SettingVisitorSeconds])*time.Second &&
+		at.Sub(l.lastVisitor) >= time.Duration(settings[store.SettingVisitorCooldownMin])*time.Minute
+	if visitor {
+		l.lastVisitor = at
+	}
 	alert := dwell >= need && at.Sub(l.lastAlert) >= cooldown && !known
 	if alert {
 		l.lastAlert = at
 		l.spans = nil
 	}
 	t.mu.Unlock()
+
+	if visitor {
+		t.Log.Info("visitor at the gate", "camera", cam.Slug, "seconds", int(recent.Seconds()))
+		t.Assistant.Send(AssistantEvent{Kind: "visitor", Camera: cam.Name, Seconds: int(recent.Seconds()), At: at.UTC()})
+	}
 
 	if !alert {
 		return

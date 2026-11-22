@@ -165,7 +165,16 @@ siang/malam) tetap diukur di seluruh gambar.
 | `PATCH` · `DELETE` | `/people/{id}` | `{name?, notify?}` · hapus (sampelnya kembali tanpa nama) |
 
 Pengaturan terkait (`PUT /settings`): `face_notify`, `face_match` (×100), `face_visit_min`,
-`loiter_notify`, `loiter_seconds`, `loiter_window`, `loiter_cooldown_min`.
+`loiter_notify`, `loiter_seconds`, `loiter_window`, `loiter_cooldown_min`, `assistant_greet`,
+`visitor_seconds`, `visitor_cooldown_min`.
+
+**Event untuk asisten rumah** (`NVR_ASSISTANT_URL`, mis. kawan-bridge
+`https://xiaozhi.tarkiman.com/cctv?token=…`): `POST` JSON
+`{"kind":"person_arrived","camera","name","score","at"}` saat orang dikenal datang (sekali per
+kunjungan, bila `assistant_greet` dan `notify` orangnya aktif) dan
+`{"kind":"visitor","camera","seconds","at"}` saat orang tak dikenal berdiri di zona depan
+≥ `visitor_seconds` dalam semenit terakhir (bukan saat ada orang dikenal dalam
+`loiter_window`), maks. sekali per `visitor_cooldown_min`.
 
 ## Event (fase 3)
 

@@ -129,6 +129,7 @@ func run() error {
 	go watcher.Run(ctx)
 	// Arrival and loitering alerts go to the same webhooks as the camera alerts.
 	visionTracker.Notifier, visionTracker.PublicURL = watcher.Notifier, cfg.PublicURL
+	visionTracker.Assistant = vision.NewAssistant(cfg.AssistantURL, log.With("component", "assistant"))
 	go watcher.Startup(ctx, version) // confirms the box came back after a reboot or deploy
 
 	srv := &http.Server{
