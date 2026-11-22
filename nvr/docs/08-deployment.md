@@ -209,3 +209,11 @@ Cek: `curl -H "Authorization: Bearer $VISION_TOKEN" http://192.168.1.13:8093/hea
 (sesi aktif, waktu inferensi, jumlah laporan). Beban terukur di Pi: ±0,4–0,5 core dan
 ±130–290 MB selama ada aktivitas; diam di luar itu.
 
+### Asisten rumah (Echa)
+
+`NVR_ASSISTANT_URL` di `.env` `umma` = endpoint `/cctv` kawan-bridge (repo
+`virtual-assistant`) beserta tokennya, mis. `https://xiaozhi.tarkiman.com/cctv?token=<CCTV_TOKEN>`.
+Bridge menyapa lewat speaker ESP32 di rumah ("Selamat datang, <nama>." / "Maaf, cari siapa
+yah dan ada perlu apa?") dan mengirim pemberitahuan ke aplikasi Vira di HP. Kosongkan untuk
+mematikan.
+

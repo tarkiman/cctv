@@ -33,6 +33,12 @@ const (
 	SettingLoiterSeconds     = "loiter_seconds"
 	SettingLoiterWindow      = "loiter_window"
 	SettingLoiterCooldownMin = "loiter_cooldown_min"
+	// The home assistant (NVR_ASSISTANT_URL): greet known arrivals (1/0); ask an unknown
+	// person who stands at the gate visitor_seconds within a minute, at most once per
+	// visitor_cooldown_min.
+	SettingAssistantGreet     = "assistant_greet"
+	SettingVisitorSeconds     = "visitor_seconds"
+	SettingVisitorCooldownMin = "visitor_cooldown_min"
 )
 
 var settingDefaults = map[string]int{
@@ -47,31 +53,37 @@ var settingDefaults = map[string]int{
 	// matched at only ~0.2-0.3 and different people up to ~0.6, so arrival
 	// notifications start off and need a clear match; enable them per installation once
 	// a camera sees faces at eye level.
-	SettingFaceMatch:         55,
-	SettingFaceNotify:        0,
-	SettingFaceVisitMin:      30,
-	SettingLoiterNotify:      1,
-	SettingLoiterSeconds:     60,
-	SettingLoiterWindow:      180,
-	SettingLoiterCooldownMin: 15,
+	SettingFaceMatch:          55,
+	SettingFaceNotify:         0,
+	SettingFaceVisitMin:       30,
+	SettingLoiterNotify:       1,
+	SettingLoiterSeconds:      60,
+	SettingLoiterWindow:       180,
+	SettingLoiterCooldownMin:  15,
+	SettingAssistantGreet:     1,
+	SettingVisitorSeconds:     15,
+	SettingVisitorCooldownMin: 10,
 }
 
 // SettingLimits bounds each setting so the UI cannot store nonsense.
 var SettingLimits = map[string][2]int{
-	SettingMinFreePercent:    {1, 50},
-	SettingTimelapseKeepDays: {0, 30},
-	SettingTimelapseFPS:      {1, 60},
-	SettingSnapshotSeconds:   {10, 600},
-	SettingDetectFPS:         {1, 5},
-	SettingMotionThreshold:   {8, 80},
-	SettingMotionMinArea:     {2, 300},
-	SettingFaceMatch:         {25, 80},
-	SettingFaceNotify:        {0, 1},
-	SettingFaceVisitMin:      {5, 240},
-	SettingLoiterNotify:      {0, 1},
-	SettingLoiterSeconds:     {15, 600},
-	SettingLoiterWindow:      {60, 900},
-	SettingLoiterCooldownMin: {1, 240},
+	SettingMinFreePercent:     {1, 50},
+	SettingTimelapseKeepDays:  {0, 30},
+	SettingTimelapseFPS:       {1, 60},
+	SettingSnapshotSeconds:    {10, 600},
+	SettingDetectFPS:          {1, 5},
+	SettingMotionThreshold:    {8, 80},
+	SettingMotionMinArea:      {2, 300},
+	SettingFaceMatch:          {25, 80},
+	SettingFaceNotify:         {0, 1},
+	SettingFaceVisitMin:       {5, 240},
+	SettingLoiterNotify:       {0, 1},
+	SettingLoiterSeconds:      {15, 600},
+	SettingLoiterWindow:       {60, 900},
+	SettingLoiterCooldownMin:  {1, 240},
+	SettingAssistantGreet:     {0, 1},
+	SettingVisitorSeconds:     {5, 120},
+	SettingVisitorCooldownMin: {1, 120},
 }
 
 // OverrideDefault replaces a setting's default (clamped to its limits), e.g. with the

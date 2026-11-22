@@ -196,3 +196,78 @@ func TestCluster(t *testing.T) {
 		t.Fatalf("centroid similarity %.2f", s)
 	}
 }
+
+// TestAssistantEvents: a known arrival is greeted once; a stranger standing at the gate
+// is asked once (not a passer-by, not while family was just seen).
+func TestAssistantEvents(t *testing.T) {
+	tr, cam := newTracker(t)
+	ctx := context.Background()
+	var mu sync.Mutex
+	var got []AssistantEvent
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var e AssistantEvent
+		json.NewDecoder(r.Body).Decode(&e)
+		mu.Lock()
+		got = append(got, e)
+		mu.Unlock()
+	}))
+	defer srv.Close()
+	tr.Assistant = NewAssistant(srv.URL+"/cctv?token=x", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	events := func(n int) []AssistantEvent {
+		deadline := time.Now().Add(3 * time.Second)
+		for {
+			mu.Lock()
+			out := append([]AssistantEvent(nil), got...)
+			mu.Unlock()
+			if len(out) >= n || time.Now().After(deadline) {
+				time.Sleep(50 * time.Millisecond)
+				mu.Lock()
+				out = append([]AssistantEvent(nil), got...)
+				mu.Unlock()
+				return out
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+	settings, _ := tr.Store.Settings.All(ctx)
+	base := time.Now()
+
+	// A passer-by (6 s) is not asked.
+	for k := 0; k <= 6; k += 2 {
+		tr.outside(cam, base.Add(time.Duration(k)*time.Second), settings)
+	}
+	if e := events(1); len(e) != 0 {
+		t.Fatalf("passer-by asked: %+v", e)
+	}
+	// Standing at the gate 16 s: asked once, not again within the cooldown.
+	s := base.Add(10 * time.Minute)
+	for k := 0; k <= 40; k += 2 {
+		tr.outside(cam, s.Add(time.Duration(k)*time.Second), settings)
+	}
+	e := events(1)
+	if len(e) != 1 || e[0].Kind != "visitor" || e[0].Seconds < 15 || e[0].Camera != cam.Name {
+		t.Fatalf("visitor events = %+v", e)
+	}
+
+	// A known arrival is greeted by name (with the Discord arrival notice off).
+	p, _ := tr.Store.People.Ensure(ctx, "Abi")
+	id, _ := tr.Store.Faces.Insert(ctx, &store.FaceSample{CameraID: cam.ID, At: 1, Zone: "inside", Path: "x.jpg", Score: 0.9, Size: 100, Embedding: unit(3, 4, 0.2)})
+	tr.Store.Faces.Label(ctx, []int64{id}, p.ID)
+	tr.InvalidateGallery()
+	settings, _ = tr.Store.Settings.All(ctx)
+	at := base.Add(time.Hour)
+	f := &FaceHit{Zone: "inside", Score: 0.9, Size: 100, Embedding: unit(3, 4, 0.2), JPEG: jpeg}
+	tr.recognize(ctx, cam, f, at, settings)
+	tr.recognize(ctx, cam, f, at.Add(time.Second), settings)
+	e = events(2)
+	if len(e) != 2 || e[1].Kind != "person_arrived" || e[1].Name != "Abi" {
+		t.Fatalf("arrival events = %+v", e)
+	}
+	// Family just seen: a stranger at the gate is not asked.
+	for k := 0; k <= 40; k += 2 {
+		tr.outside(cam, at.Add(time.Duration(30+k)*time.Second), settings)
+	}
+	if e := events(3); len(e) != 2 {
+		t.Fatalf("asked while family was around: %+v", e)
+	}
+}

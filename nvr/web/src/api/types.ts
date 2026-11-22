@@ -134,7 +134,10 @@ export type Settings = Record<
   | 'loiter_notify'
   | 'loiter_seconds'
   | 'loiter_window'
-  | 'loiter_cooldown_min',
+  | 'loiter_cooldown_min'
+  | 'assistant_greet'
+  | 'visitor_seconds'
+  | 'visitor_cooldown_min',
   number
 >
 
